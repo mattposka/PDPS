@@ -1,0 +1,8 @@
+batch size:32
+./result/green/txt
+restore from LEAF_UNET_B0064_S021700.pth
+using running mean and running var
+preprocessing time: 0.6998405456542969
+Processing rapa_cam_41_2020-08-23_1700red
+batch num:1
+The total test time for rapa_cam_41_2020-08-23_1700red is 51.739412784576416

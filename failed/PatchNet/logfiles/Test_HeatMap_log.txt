@@ -1,0 +1,8 @@
+batch size:32
+failed/txt
+restore from pytorch_models/LEAF_UNET_512_B0008_S0_5200.pth
+using running mean and running var
+preprocessing time: 0.4197728633880615
+Processing rapa_cam_24_2021-02-28_0500
+batch num:1
+The total test time for rapa_cam_24_2021-02-28_0500 is 28.291879653930664
