@@ -1,2 +1,0 @@
-./result/green/512_test_stride_64/images/rapa_cam_14_2020-08-23_1700red/rapa_cam_14_2020-08-23_1700red_2240_1344.jpg
-./result/green/512_test_stride_64/images/rapa_cam_14_2020-08-23_1700red/rapa_cam_14_2020-08-23_1700red_2688_1344.jpg
