@@ -37,7 +37,7 @@ def merge_npz_thread(dirpath, npzfiles, thread_index, ranges, width, height):
         coomats.append(npzfile)
 
         mutex.release()
-        print('finish ' + npz + ' \t' + str(s) + '/' + str(len(npzfiles)))
+        #print('finish ' + npz + ' \t' + str(s) + '/' + str(len(npzfiles)))
         del npzfile
 
 
@@ -105,7 +105,7 @@ def merge_npz(npzpath, dir, npzname, width, height):
         print( 'np.max( coomat ) :',np.max( coomat ) )
     if np.sum( coomat ) < 20:
         print( 'np.sum( coomat ) :',np.sum( coomat ) )
-    print('saving ' + npzname)
+#    print('saving ' + npzname)
     save_npz(npzname, coomat.tocsr())
 
 
