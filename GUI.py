@@ -61,117 +61,6 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 # remove background
-#def rmbackground(slide, npz_dir_whole, npz_dir_whole_post, ref_extent, ref_area):
-#    print( 'slide :',slide )
-#    print( 'npz_dir_whole :',npz_dir_whole )
-#    print( 'npz_dir_whole_post :',npz_dir_whole_post )
-#
-#    low_dim_img = Image.open(slide)
-#    # HSV - Hue[0,360],Saturation[0,100],Value[0,100]
-#    low_hsv_img = low_dim_img.convert('HSV')
-#    #print( 'low_hsv_img.shape :',low_hsv_img.shape )
-#    _, low_s, _ = low_hsv_img.split()
-#
-#
-#    ##############################################################################################################################
-#    ##############################################################################################################################
-#    ##############################################################################################################################
-#    #img = cv2.imread(slide)
-#    #
-#    ## HSV is Hue[0,179], Saturation[0,255], Value[0,255]
-#    #hsv_img = cv2.cvtColor( img,cv2.COLOR_BGR2HSV )
-#    #hue = hsv_img[:,:,0]
-#    #sat = hsv_img[:,:,1]
-#    #val = hsv_img[:,:,2]
-#    #
-#    #ret_sat,thresh_sat = cv2.threshold( sat,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU ) 
-#    #ret_hue,thresh_hue = cv2.threshold( hue,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU ) 
-#    #mask = cv2.bitwise_and( thresh_hue,thresh_sat,mask=None )
-#    #
-#    #
-#    ## only keep the largest connected component
-#    #closed_mask = closing( mask,square(3) )
-#    #labeled_img = label(closed_mask, connectivity=2)
-#
-#    ## leaf area should be the second largest number, with background being the most common
-#    #mode_label,count = ss.mode( labeled_img,axis=None )
-#    ## remove the most common label here
-#    #labeled_img_filtered = np.where( labeled_img==mode_label,np.nan,labeled_img )
-#    #mode_label,count = ss.mode( labeled_img_filtered,axis=None,nan_policy='omit' )
-#    #leaf_label = mode_label
-#
-#    #leaf_mask = np.where( labeled_img==leaf_label,True,False )
-#    #print( 'leaf_mask.shape :',leaf_mask.shape )
-#    #low_s_bin = leaf_mask
-#    #img = cv2.cvtColor( img,cv2.COLOR_BGR2RGB )
-#
-#    ##############################################################################################################################
-#    ##############################################################################################################################
-#    ##############################################################################################################################
-#
-#    # --OSTU threshold
-#    # OSTU is a method to separate foreground from background
-#    low_s_thre = filters.threshold_otsu(np.array(low_s))
-#    #print( 'low_s_thre shape :',low_s_thre.shape )
-#    low_s_bin = low_s > low_s_thre  # row is y and col is x
-#    #print( 'low_s_bin shape :',low_s_bin.shape )
-#
-#    # only keep the largest connected component
-#    low_s_bin = closing(low_s_bin, square(3))
-#    #print( 'low_s_bin shape :',low_s_bin.shape )
-#    labeled_img = label(low_s_bin, connectivity=2)
-#    #print( 'labeled_img shape :',labeled_img.shape )
-#
-#    props = regionprops(labeled_img)
-#    area_list = np.zeros(len(props))
-#    #print( 'area_list shape :',area_list.shape )
-#    for i, reg in enumerate(props):  # i+1 is the label
-#        area_list[i] = reg.area
-#
-#    # sort
-#    area_list = area_list.argsort()[::-1]
-#    #print( 'area_list shape :',area_list.shape )
-#    label_id = -1
-#    label_area = 0
-#    extent = 0
-#    for i in area_list:
-#        extent = props[i].extent
-#        if extent > ref_extent:
-#            label_id = i + 1
-#            label_area = props[i].area
-#            break
-#    if label_id == -1 or label_area < ref_area:
-#        print("extent:", extent)
-#        print("area", ref_area)
-#
-#    assert label_id != -1, "(2) failed to find the leaf region in pre-processing!" \
-#                           "try to REDUCE 'ref_extent' a bit"
-#
-#    # MP changed from assert label_area > ref_area to just print an error instead
-#    ####################################################################################################
-#    if label_area > ref_area:
-#        print('(1)WARNING')
-#        print("(1) failed to find the leaf region in pre-processing!\n Try to REDUCE 'ref_extent' a bit")
-#        print('(1) label_area : {}\tref_area : {}'.format(label_area,ref_area) )
-#    ####################################################################################################
-#
-#    #assert label_area > ref_area, "fail to find the leaf region in pre-processing!" \
-#    #                              "try to REDUCE 'ref_extent' a bit"
-#
-#    # TODO Why is this different?
-#    low_s_bin = labeled_img != label_id
-#
-#    SlideName = slide.split('/')[-1]
-#    print( 'SlideName :',SlideName )
-#    slideNameMap_npz = SlideName.replace(".png", "_Map.npz")
-#    print( 'slideNameMap_npz :',slideNameMap_npz )
-#    slideNameMap_npz_pth = os.path.join(npz_dir_whole, slideNameMap_npz)
-#    print( 'slideNameMap_npz_pth :',slideNameMap_npz_pth )
-#    SegRes = load_npz(slideNameMap_npz_pth)
-#    SegRes = SegRes.todense()
-#    SegRes[low_s_bin] = 0
-#    save_npz(os.path.join(npz_dir_whole_post, slideNameMap_npz), csr_matrix(SegRes))
-
 def rmbackground2( slide,leaf_mask_dir,npz_dir_whole,npz_dir_whole_post ):
 
     SlideName = slide.split('/')[-1]
@@ -203,151 +92,6 @@ def SavePatchMap(npz_dir_whole_post, PredFigPath, MatName):
     del SegRes
     Fig.convert('RGB')
     Fig.save(FigFile, 'PNG')
-
-##TODO what is this for?
-#def findN(cir_list):
-#    N = 0
-#    for i in cir_list:
-#        if i[0] > 20:
-#            N += 1
-#
-#    return N
-
-
-
-
-#TODO look at this?
-#TODO postprocess to only record the largest (n_lesions) areas?
-#def postprocess(cir_list, rect_list, N, imag, imagelst):
-# N is number of circles?
-#def postprocess(cir_list, rect_list, N, imag, imagelst, root_dir,):
-#    print( '\nPostProcessing now!' )
-#    print( 'root_dir :',root_dir )
-#
-#    # variables
-#    global count
-#    sought = [0, 0, 255]
-#    count += 1
-#    lesion = []
-#    area = []
-#    max_cir = []
-##    root_dir = './result/'
-#    CoordPath = root_dir + "/PatchNet/npz/Coord"
-#    LesionArea = root_dir + "/PatchNet/npz/Area"
-#
-#    result_dir = os.path.join( root_dir,'resultFiles' )
-#    print( 'result_dir :',result_dir )
-#    if not os.path.exists( result_dir ):
-#        os.makedirs( result_dir )
-#
-#    result_file = os.path.join( result_dir,root_dir+'.xlsx' )
-#    print( '\tresult_file located :',result_file )
-#
-#            #rect_list.append([w * h, (x, y), (x + w, y + h)])
-#
-#    print( 'rect_list :',rect_list )
-#
-#    max_rect = [p[1] for p in sorted(sorted(enumerate(rect_list), key=lambda x: x[1])[-N:], key=itemgetter(0))]
-#    lesion_id = [p[0]+1 for p in enumerate(max_rect)]
-#    print( 'max_rect :',max_rect )
-#    print( 'lesion_id :',lesion_id )
-#    del lesion_id[-1]
-#
-#    # rects
-#    del max_rect[0]
-#    for x in max_rect:
-#        del x[0]
-#    for k in range(0, len(max_rect)):
-#        lesion.append(imag[max_rect[k][0][1]:max_rect[k][1][1], max_rect[k][0][0]:max_rect[k][1][0]])
-#    for d in range(0, len(lesion)):
-#        result = np.count_nonzero(np.all(lesion[d] == sought, axis=2))
-#        area.append(result)
-#    for j in range(0, len(max_rect)):
-#        cv2.putText(imag, str(j+1), (int(max_rect[j][0][0]), int(max_rect[j][0][1])), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 0, 0), 2)
-#
-#    if not os.path.exists(CoordPath):
-#        os.makedirs(CoordPath)
-#    filename = 'rects.txt'
-#    with open(os.path.join(CoordPath, filename), 'a') as file:
-#        file.write('image' + str(count) + ':' + str(max_rect) + '\n')
-#    print('\tbounding box coordinates saved')
-#    if not os.path.exists(LesionArea):
-#        os.makedirs(LesionArea)
-#    filename = 'lesion_area.txt'
-#    with open(os.path.join(LesionArea, filename), 'a') as file:
-#        file.write('image' + str(count) + ':' + str(area).strip('[]') + '\n')
-#    print('\tlesion area saved')
-#
-#    # circles
-#    for i in range(0, N):
-#        max2 = max(cir_list, key=lambda x: x[0])
-#        cir_list.remove(max2)
-#        max_cir.append(max2)
-#    del max_cir[0]
-#
-#    if not os.path.exists(CoordPath):
-#        os.makedirs(CoordPath)
-#    filename = 'circles.txt'
-#    with open(os.path.join(CoordPath, filename), 'a') as file:
-#        file.write('image' + str(count) + ': ' + str(max_cir) + '\n')
-#    print('\tcircle center coordinates and radius saved')
-#
-#    # spreadsheet
-#    imname = imagelst[0].split('/')[-1]
-#    cameraID = imname[9:11]
-#    year = imname[12:16]
-#    month = imname[17:19]
-#    day = imname[20:22]
-#    hour = imname[23:27]
-#
-#    l1 = cameraID
-#    l2 = year
-#    l3 = month
-#    l4 = day
-#    l5 = hour
-#    l6 = lesion_id
-#    l7 = area
-#    l8 = max_rect
-#    l9 = max_cir
-#
-#    s1 = pd.Series(l1, name='Camera ID')
-#    s2 = pd.Series(l2, name='Year')
-#    s3 = pd.Series(l3, name='Month')
-#    s4 = pd.Series(l4, name='Day')
-#    s5 = pd.Series(l5, name='Time')
-#    s6 = pd.Series(l6, name='Lesion ID')
-#    s7 = pd.Series(l7, name='Area')
-#    s8 = pd.Series(l8, name='rect')
-#    s9 = pd.Series(l9, name='circle')
-#    # Create a Pandas dataframe from the data.
-#    df = pd.concat([s1, s2, s3, s4, s5, s6, s7, s8, s9], axis=1)
-#
-#    spreadsheet = imagelst[0].split('/')[-2]
-#    print( '\tspreadsheet :',spreadsheet )
-#    #filename = spreadsheet + '.xlsx'
-#    #print( 'filename :',filename )
-#    #TODO
-#
-#    if not os.path.exists( result_file ):
-#        # Create a Pandas Excel writer using XlsxWriter as the engine.
-#        writer = pd.ExcelWriter(result_file, engine='xlsxwriter')
-#        # Convert the dataframe to an XlsxWriter Excel object.
-#        df.to_excel(writer, sheet_name='Sheet1', index=False)
-#        # Close the Pandas Excel writer and output the Excel file.
-#        writer.save()
-#    else:
-#        writer = pd.ExcelWriter(result_file, engine='openpyxl')
-#        # try to open an existing workbook
-#        writer.book = load_workbook(os.path.join(result_dir, filename))
-#        # copy existing sheets
-#        writer.sheets = dict((ws.title, ws) for ws in writer.book.worksheets)
-#        # read existing file
-#
-#        #TODO MP don't have excel on this computer
-#        reader = pd.read_excel(result_file)
-#        # write out the new sheet
-#        df.to_excel(writer, index=False, header=False, startrow=len(reader) + 1)
-#        writer.close()
 
 class GUI(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
@@ -711,7 +455,7 @@ class GUI(tk.Frame):
         self.imageDF[ 'HoursElapsed' ] = hours_elapsed
 
     # This will try to combine regions that are very close to one another
-    def combineRegions( self,labeled_img,expand_ratio=1.1,mal=450 ):
+    def combineRegions( self,labeled_img,ref_ecc,pred_img_pth,expand_ratio=1.025,mal=450 ):
         circle_img = np.asarray( labeled_img,dtype=np.uint8 )
         contours,heir = cv2.findContours( circle_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE )
 
@@ -722,19 +466,23 @@ class GUI(tk.Frame):
                 centers.append( [x,y,r] )
         for c in centers:
            cv2.circle( circle_img,(int(c[0]),int(c[1])),int(expand_ratio*c[2]),(255),-1 )
-        imsave( 'cir_img.png',circle_img )
+        cir_img_pth = pred_img_pth.replace( '.png','_cir_img.png' )
+        imsave( cir_img_pth,circle_img )
 
         labeled_circle = label(circle_img, connectivity=2)
-        imsave( 'labeled_circle.png',labeled_circle )
+        lab_cir_pth = pred_img_pth.replace( '.png','_lab_cir.png' )
+        imsave( lab_cir_pth,labeled_circle )
 
         labeled_circle[ labeled_img==0 ] = 0
         labeled_image = labeled_circle
-        imsave( 'labeled_mg.png',labeled_img )
+        lab_img_pth = pred_img_pth.replace( '.png','_lab_img.png' )
+        imsave( lab_img_pth,labeled_circle )
+        imsave( 'labeled_img.png',labeled_image )
 
-        new_props = regionprops(labeled_img)
-        print( 'len(new_props) :',len(new_props) )
+        new_props = regionprops(labeled_image)
+        #print( 'len(new_props) :',len(new_props) )
         # remove non-circle region
-        labeled_img = self.circleFilter( new_props,labeled_img,ref_ecc )
+        labeled_img = self.circleFilter( new_props,labeled_image,ref_ecc )
 
         return labeled_img
 
@@ -749,7 +497,7 @@ class GUI(tk.Frame):
 
         new_labeled_img8 = np.asarray( labeled_img,dtype=np.uint8 )
         contours,heir = cv2.findContours( new_labeled_img8,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE )
-        print( 'len( contours ) :',len(contours) )
+        #print( 'len( contours ) :',len(contours) )
 
         centers = []
         for c in contours:
@@ -770,10 +518,16 @@ class GUI(tk.Frame):
         return new_img
 
     # Sort by contour size and take n_lesion largest areas, then sort by x+y locations
-    def sortAndFilterContours( self,contour_arr ):
+    def sortAndFilterContours( self,contour_arr,imgsWLesions_dir,df_index ):
+        con_sav_pth1 = os.path.join( imgsWLesions_dir,self.imageDF.loc[df_index,'name'].replace('.png','conv1.p' ) )
+        p.dump( contour_arr,open(con_sav_pth1,'wb') )
+
         contour_arr = contour_arr[ contour_arr[:,7].argsort() ][-self.num_lesions:,:]
         contour_arr = contour_arr[ contour_arr[:,5].argsort() ]
         contour_arr = contour_arr[ contour_arr[:,6].argsort(kind='mergesort') ]
+
+        con_sav_pth2 = os.path.join( imgsWLesions_dir,self.imageDF.loc[df_index,'name'].replace('.png','conv1.p' ) )
+        p.dump( contour_arr,open(con_sav_pth1,'wb') )
 
         return contour_arr
 
@@ -790,12 +544,13 @@ class GUI(tk.Frame):
         # Here contours_ordered will be:
         # [ w*h,x,y,x+w,y+h,cx,cy,area ]
         if len(prev_img_df) > 0:
+            dfl = len( prev_img_df )
             contours_reordered = np.zeros( shape=(self.num_lesions,8) )
             for i in range( self.num_lesions ):
-                xs = prev_img_df.at[-1,'l'+str(i)+'_xstart']
-                xe = prev_img_df.at[-1,'l'+str(i)+'_xend']
-                ys = prev_img_df.at[-1,'l'+str(i)+'_ystart']
-                ye = prev_img_df.at[-1,'l'+str(i)+'_yend']
+                xs = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xstart']
+                xe = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xend']
+                ys = prev_img_df.at[dfl-1,'l'+str(i+1)+'_ystart']
+                ye = prev_img_df.at[dfl-1,'l'+str(i+1)+'_yend']
 
                 found = False
                 for j in range( len(contours_ordered) ):
@@ -1103,7 +858,6 @@ class GUI(tk.Frame):
             # This is the image that the neural net produces
             img = spm.imread(test_img_pth)
             width, height = img.shape[1], img.shape[0]
-            print( 'width, height (985) :{},{}'.format(width,height) )
             merge_npz(os.path.join(npz_dir), slidename,
                               os.path.join( whole_npz_dir,slide_map_name_npz ),
                               int(width), int(height))
@@ -1123,7 +877,7 @@ class GUI(tk.Frame):
 
             #TODO Need to prevent region around the entire leaf
             # combine regions that are close to each other
-            labeled_img = self.combineRegions( labeled_img )
+            labeled_img = self.combineRegions( labeled_img,ref_ecc,pred_img_pth )
 
             # Draw circles around all areas with the same label to fill in any dounuts and crescents
             pred_img_bgrm_pth = os.path.join( PredFigPath_BgRm,slidename + "_Map.png" )
@@ -1137,7 +891,7 @@ class GUI(tk.Frame):
             
             #TODO i think they can be filtered later
             # Filter to num_lesions here
-            new_labeled_img = self.numLesionsFilter( new_labeled_img )
+            #new_labeled_img = self.numLesionsFilter( new_labeled_img )
             # This should be called something else
             # Mask background was removed, regions were expanded, combined,filtered by eccentricity
             # circled, and filled.
@@ -1150,11 +904,11 @@ class GUI(tk.Frame):
             imag = cv2.imread(pred_img_bgrm_pth, cv2.IMREAD_UNCHANGED)
             gray = cv2.cvtColor( imag,cv2.COLOR_BGR2GRAY )
 
-            #ret,gray_mask = cv2.threshold( gray,200,255,cv2.THRESH_BINARY_INV )
-            #gray_mask_inv = cv2.bitwise_not( gray_mask )
-            #leaf_bgr = cv2.bitwise_and( leaf_img,leaf_img,mask=gray_mask_inv )
-            #lesion_fg = cv2.bitwise_and( imag,imag,mask=gray_mask )
-            #im_to_write = cv2.add( leaf_bgr,lesion_fg )
+            ret,gray_mask = cv2.threshold( gray,200,255,cv2.THRESH_BINARY_INV )
+            gray_mask_inv = cv2.bitwise_not( gray_mask )
+            leaf_bgr = cv2.bitwise_and( leaf_img,leaf_img,mask=gray_mask_inv )
+            lesion_fg = cv2.bitwise_and( imag,imag,mask=gray_mask )
+            im_to_write = cv2.add( leaf_bgr,lesion_fg )
 
             # what is this blurring for? maybe we don't need it?
             blurred = cv2.GaussianBlur( gray,(5,5),0 )
@@ -1194,18 +948,18 @@ class GUI(tk.Frame):
             lesion = []
 
             # Sort by contour size and take n_lesion largest areas, then sort by x+y locations
-            contours_ordered = self.sortAndFilterContours( contour_arr )
+            contours_ordered = self.sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index )
             # check if lesions are in the same order
             contours_reordered = self.checkLesionOrder( df_index,contours_ordered )
             # add reordered contours to the DF
             self.addContoursToDF( contours_reordered,df_index )
             # draw rectangles around the lesions
-            self.drawRecsAndSaveImg( contours_reordered,imgsWLesions_dir,df_index )
+            self.drawRecsAndSaveImg( contours_reordered,im_to_write,imgsWLesions_dir,df_index )
 
 
             # Add leaf to result files
-            result_file = os.path.join( result_dir,self.save_file_name+'.xlsx' )
-            bad_result_file = os.path.join( result_dir,self.save_file_name+'_bad.xlsx' )
+            result_file = os.path.join( result_dir,self.save_file_name+'.csv' )
+            bad_result_file = os.path.join( result_dir,self.save_file_name+'_bad.csv' )
             pickle_file = os.path.join( result_dir,self.save_file_name+'.p' )
 
             clean_df = self.imageDF.copy()
@@ -1221,7 +975,6 @@ class GUI(tk.Frame):
                 else:
                     csv_df.to_csv( result_file,header=False,mode='a',index=False )
             else:
-                #TODO this is the problem
                 if bad_file_started == False:
                     csv_df.to_csv( bad_result_file,index=False )
                     bad_file_started = True
