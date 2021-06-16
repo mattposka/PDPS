@@ -16,6 +16,7 @@ import scipy
 from utils.transforms import im2vl
 from utils.mk_datasets import test_imgs_list
 from itertools import chain
+import glob
 
 import scipy.stats as ss
 import cv2
@@ -88,6 +89,8 @@ def divide_Tumor_slide(img, mask, filename, images, labels, thread_index, ranges
 def process_tumor_tif(file, filename, maskfile, images, labels, log, ref_extent, ref_area):
     start = time()
     saveNormal = True
+
+    filename = file.split('/')[-1]
 
     img = scipy.misc.imread(file)
     low_dim_img = Image.open(file)
@@ -232,16 +235,16 @@ def process_tumor_tif(file, filename, maskfile, images, labels, log, ref_extent,
 
 
 if __name__ == '__main__':
-    root_pth = '/data/leaf_train/'
+    root_pth = '/home/mposka/data/leaf_train/'
     tumorname = "green"
-    version = "feb2021"
+    version = "jun21"
     # clear test image list, i.e. using all the labeled images
     test_imgs_list = []
     ref_area = 10000
     ref_extent = 0.6
     # img_pth1 = root_pth + "imgs"
     # img_pth2 = root_pth + "new_imgs_200527/lesion_training_set_2"
-    img_pth = [root_pth + "imgs_all"]
+    img_pth = [root_pth + "imgs_new"]
     savepath = osp.join(root_pth, tumorname, version, '512_train_stride_128')
     logdirpth = osp.join(root_pth, tumorname, version, 'log')
     if not os.path.exists(logdirpth):
@@ -250,6 +253,8 @@ if __name__ == '__main__':
 
     images = os.path.join(savepath, 'images')
     labels = os.path.join(savepath, 'labels')
+    print( 'images :',images )
+    print( 'labels :',labels )
 
     if not os.path.exists(images):
         os.makedirs(images)
@@ -273,22 +278,48 @@ if __name__ == '__main__':
     total_start = time()
 
     print( '00' )
+    print( 'img_pth :',img_pth )
     # img_pth = (img_pth1, img_pth2)
-    for pth, dirs, filenames in chain.from_iterable(os.walk(path) for path in img_pth):
+    #for pth, dirs, filenames in chain.from_iterable(os.walk(path) for path in img_pth):
+    filelist = glob.glob( str(img_pth[0]) + '/*' )
+    print( 'filelist :',filelist )
+    for filename in glob.glob( img_pth[0] + '/*' ):
+            #print( 'pth :',pth )
+        #print( 'dirs :',dirs )
+        #print( 'filenames :',filenames )
         print( '33' )
-        for filename in filenames:
-            if not "original" in filename:
-                print( '11' )
-                continue
-            if filename in test_imgs_list:
-                print( '22' )
-                continue
-            file = os.path.join(pth, filename)
-            print( 'file :',file )
-            maskfile = file.replace("original", tumorname)
-            print('Tumor', file)
-            print( 'maskfile :',maskfile )
-            process_tumor_tif(file, filename, maskfile, images, labels, log, ref_area=ref_area, ref_extent=ref_extent)
+        #for filename in filenames:
+###########################################################################################################################################3
+
+        print( 'filename :',filename )
+        if not "original" in filename:
+            print( '11' )
+            continue
+        if filename in test_imgs_list:
+            print( '22' )
+            continue
+    #file = os.path.join(pth, filename)
+        file = filename
+        print( 'file :',file )
+        maskfile = file.replace("original", tumorname)
+        print('Tumor', file)
+        print( 'maskfile :',maskfile )
+        process_tumor_tif(file, filename, maskfile, images, labels, log, ref_area=ref_area, ref_extent=ref_extent)
+
+###########################################################################################################################################3
+#            print( 'filename :',filename )
+#            if not "original" in filename:
+#                print( '11' )
+#                continue
+#            if filename in test_imgs_list:
+#                print( '22' )
+#                continue
+#            file = os.path.join(pth, filename)
+#            print( 'file :',file )
+#            maskfile = file.replace("original", tumorname)
+#            print('Tumor', file)
+#            print( 'maskfile :',maskfile )
+#            process_tumor_tif(file, filename, maskfile, images, labels, log, ref_area=ref_area, ref_extent=ref_extent)
 
     total_stop = time()
     print("total processing time:", total_stop - total_start)
