@@ -15,7 +15,16 @@ import time
 import torch
 from torch.utils import data
 from utils.datasets import LEAFTest
-from model.u_net import UNet
+
+#from model.u_net import UNet
+#from model.u_net2 import UNet2
+
+import model.u_net as u_net
+import model.u_net2 as u_net2
+
+import model.u_net572 as u_net572
+import model.u_net572_dilated as u_net572_dilated
+
 import torch.nn as nn
 from merge_npz_final import merge_npz
 from scipy.sparse import load_npz, save_npz, csr_matrix, coo_matrix
@@ -34,8 +43,51 @@ import datetime as dt
 import glob
 import warnings
 
+import shutil
+
 # There is a UserWarning for one pytorch layer that I dont' want printing
 warnings.filterwarnings('ignore',category=UserWarning)
+
+#TODO delete images if they produce good results - only save intermediate images/steps
+# for images that are broken for bugfixing later.
+# - rename directories more clearly
+# - test circle filter
+# - check lesion ordering 
+#   - especially when a lesion dissapears
+# - shrink new network
+#   - add dilated kernel in first layer
+#   - don't upscale before skip connections?
+#   - use dense layer at the very end?
+#   - check other deep supervision networks
+# - change the ratio of good to bad images for the training set
+#
+# Files to Keep if Bad Segmentation:
+# - patches/images/* - This is the input patches to the network                             +
+# - Add original Leaf Image or reconstruct function in Notebook for examining?              
+# - masks/leaf_masks/*.png - mask of leaf from input image                                  +
+# - masks/lesion_masks/* - segmentation of each individual patch                            +
+#   - probably not needed if reconstructed segmentation is saved (resultFiles/)
+#
+# Files to Delete after every image:
+# log/ - Nothing really saved here                                                          +
+# PatchNet/ - This is just npz files used in processing                                     + 
+# txt/ - Nothing really saved here                                                          +
+# masks/leaf_masks/*.p                                                                      +
+# 
+# Files to delete only if segmentation is Good:
+# patches/images/IMG_NAME/
+# masks/leaf_masks/IMG_NAME
+# masks/lesion_masks/IMG_NAME/
+#
+# Idea - use another network to go from regions segmented by first network to 
+# full segmentation in lower resolutio
+# 
+# or maybe just decrease the resolution of all of the training and input images
+# to save space and get better segmentation?
+# What to do:
+# Add all training images to GPU server computer and generate new training set there
+
+# TODO os.remove() and os.rmdir() or os.removedirs()
 
 Image.MAX_IMAGE_PIXELS = 933120000
 imagelst = []
@@ -69,7 +121,7 @@ def rmbackground2( slide,leaf_mask_dir,npz_dir_whole,npz_dir_whole_post ):
     mskpth_p = mskpth.replace( '.png','.p' )
     leaf_mask = p.load( open(mskpth_p,'rb') )
     # remove the pickle file of the leaf mask to save space once the program is running correctly
-    #os.remove( mskpth_p )
+    os.remove( mskpth_p )
 
     slideNameMap_npz = SlideName.replace(".png", "_Map.npz")
     slideNameMap_npz_pth = os.path.join(npz_dir_whole, slideNameMap_npz)
@@ -79,17 +131,21 @@ def rmbackground2( slide,leaf_mask_dir,npz_dir_whole,npz_dir_whole_post ):
 
     save_npz(os.path.join(npz_dir_whole_post, slideNameMap_npz), csr_matrix(SegRes))
 
-#TODO figure out what/where this is being saved
 
+# Takes npz file and saves it as png file in the PredFigPath directory 
 def SavePatchMap(npz_dir_whole_post, PredFigPath, MatName):
-    FigName = MatName.replace('.npz', '.png')
-    FigFile = os.path.join(PredFigPath, FigName)
     MatFile = os.path.join(npz_dir_whole_post, MatName)
+
     SegRes = load_npz(MatFile)
     SegRes = SegRes.todense()
     SegRes = vl2im(SegRes)
+
+    FigName = MatName.replace('.npz', '.png')
+    FigFile = os.path.join(PredFigPath, FigName)
     Fig = Image.fromarray(SegRes.astype(dtype=np.uint8))
+
     del SegRes
+
     Fig.convert('RGB')
     Fig.save(FigFile, 'PNG')
 
@@ -372,6 +428,8 @@ class GUI(tk.Frame):
         imagelst = self.imageDF['filename']
         return imagelst
 
+    # Not used right now
+    # keeps the largest [num_lesions] lesions
     def numLesionsFilter( self,new_labeled_img ):
         label_props_area_list = np.zeros( shape=[len(new_labeled_img),2] )
         label_props = regionprops( new_labeled_img )  
@@ -386,6 +444,7 @@ class GUI(tk.Frame):
 
         return new_labeled_img
 
+    # fills doughnuts, but objects must be fully closed for it to work
     def fillHoles( self,img ):
         #######################################################################################################
         # floolfill stuff
@@ -462,7 +521,7 @@ class GUI(tk.Frame):
         centers = []
         for c in contours:
             (x,y),r = cv2.minEnclosingCircle( c ) 
-            if r > 5 and r < int(mal/2):
+            if r > 5 and r < int(mal/2): # mal is maximum radius
                 centers.append( [x,y,r] )
         for c in centers:
            cv2.circle( circle_img,(int(c[0]),int(c[1])),int(expand_ratio*c[2]),(255),-1 )
@@ -482,7 +541,7 @@ class GUI(tk.Frame):
         new_props = regionprops(labeled_image)
         #print( 'len(new_props) :',len(new_props) )
         # remove non-circle region
-        labeled_img = self.circleFilter( new_props,labeled_image,ref_ecc )
+        #labeled_img = self.circleFilter( new_props,labeled_image,ref_ecc=ref_ecc )
 
         return labeled_img
 
@@ -522,6 +581,7 @@ class GUI(tk.Frame):
         con_sav_pth1 = os.path.join( imgsWLesions_dir,self.imageDF.loc[df_index,'name'].replace('.png','conv1.p' ) )
         p.dump( contour_arr,open(con_sav_pth1,'wb') )
 
+        # This is where the largest [num_lesions] lesions are kept
         contour_arr = contour_arr[ contour_arr[:,7].argsort() ][-self.num_lesions:,:]
         contour_arr = contour_arr[ contour_arr[:,5].argsort() ]
         contour_arr = contour_arr[ contour_arr[:,6].argsort(kind='mergesort') ]
@@ -532,6 +592,7 @@ class GUI(tk.Frame):
         return contour_arr
 
     # Checks the lesions order to the previous lesions in the same leaf
+    # TODO probably need to fix this
     def checkLesionOrder( self,df_index,contours_ordered ):
         prev_img_df = self.imageDF[ 
                         (self.imageDF['cameraID']==self.imageDF.loc[df_index,'cameraID']) &
@@ -575,7 +636,14 @@ class GUI(tk.Frame):
             self.imageDF.at[ df_index,'l'+str(l+1)+'_ystart' ] = contours_reordered[l,2]
             self.imageDF.at[ df_index,'l'+str(l+1)+'_yend' ] = contours_reordered[l,4]
 
-        if len( contours_reordered ) < self.num_lesions or 0 in contours_reordered:
+        slf_size = 1000
+        slf = contours_reordered[:self.num_lesions,7]
+        too_small = False
+        for i in slf:
+            if i < 1000:
+                too_small = True
+
+        if len( contours_reordered ) < self.num_lesions or 0 in contours_reordered or too_small == True:
             self.bad_df_indices.append( df_index )
         else:
             self.good_df_indices.append( df_index )
@@ -634,6 +702,10 @@ class GUI(tk.Frame):
         if not os.path.exists( result_dir ):
             os.makedirs( result_dir )
 
+        postprocess_dir = os.path.join( result_dir,'postprocessing' )
+        if not os.path.exists( postprocess_dir ):
+            os.makedirs( postprocess_dir )
+
         patch_dir = os.path.join( root_dir,'patches' )
         if not os.path.exists( patch_dir ):
             os.makedirs( patch_dir )
@@ -664,23 +736,24 @@ class GUI(tk.Frame):
         if not os.path.exists(map_dir):
             os.makedirs(map_dir)
 
-        log_dir = os.path.join( patchnet_dir,'logfiles' )
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
+        #log_dir = os.path.join( patchnet_dir,'logfiles' )
+        #if not os.path.exists(log_dir):
+        #    os.makedirs(log_dir)
 
         npz_dir_whole = os.path.join( npz_dir,'whole_npz' )
         npz_dir_whole_post = os.path.join( npz_dir,'whole_npz_post' )
-        PredFigPath = os.path.join( result_dir,'whole_fig_pred' )
-        PredFigPath_BgRm = os.path.join( result_dir,'whole_fig_pred_bgrm' )
+
+        #PredFigPath = os.path.join( result_dir,'whole_fig_pred' )
+        #PredFigPath_BgRm = os.path.join( result_dir,'whole_fig_pred_bgrm' )
         imgsWLesions_dir = os.path.join( result_dir,'imgsWLesions' )
         if not os.path.exists(imgsWLesions_dir):
             os.makedirs(imgsWLesions_dir)
         if not os.path.exists(npz_dir_whole_post):
             os.makedirs(npz_dir_whole_post)
-        if not os.path.exists(PredFigPath):
-            os.makedirs(PredFigPath)
-        if not os.path.exists(PredFigPath_BgRm):
-            os.makedirs(PredFigPath_BgRm)
+        #if not os.path.exists(PredFigPath):
+        #    os.makedirs(PredFigPath)
+        #if not os.path.exists(PredFigPath_BgRm):
+        #    os.makedirs(PredFigPath_BgRm)
         ###################################################################
 
         # More path stuff
@@ -720,6 +793,8 @@ class GUI(tk.Frame):
             modelname = self.modelTypeVar.get()
             # setting
             patch_size = 512
+            if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_dilated_Jun21.pth':
+                patch_size = 572
             #TODO
             #patch_size = 256 
             INPUT_SIZE = (patch_size, patch_size)
@@ -729,7 +804,7 @@ class GUI(tk.Frame):
             ref_extent = 0.6  # pre-processing
             rm_rf_area = 5000  # post-processing
             #ref_ecc = 0.92  # post-processing
-            ref_ecc = 0.75  # post-processing
+            ref_ecc = 0.25  # post-processing
             BATCH_SIZE = 32
 
             #test_img_pth = imagelst[0] # name of the image, but starts with a '/'
@@ -738,6 +813,7 @@ class GUI(tk.Frame):
             filename = test_img_pth.split('/')[-1] # name of the image
             #print( 'filename :',filename )
             slidename = filename[:-4] # slidename is just the name of the image w/o extension
+            #TODO can I replace slidename with imageName?
 
             patch_mask_slide_dir = os.path.join( lesion_mask_dir,slidename )
             if not os.path.exists( patch_mask_slide_dir ):
@@ -772,25 +848,35 @@ class GUI(tk.Frame):
 #############################################################################################################################
             preprocess_start_time = time.time()
             # TODO What LogName to use?
-            LogName = "Test_HeatMap_log.txt"
-            LogFile = os.path.join(log_dir, LogName)
+            #LogName = "Test_HeatMap_log.txt"
+            #LogFile = os.path.join(log_dir, LogName)
             #print( 'LogFile :',LogFile )
-            log = open(LogFile, 'w')
-            log.writelines('batch size:' + str(BATCH_SIZE) + '\n')
-            log.writelines(data_list_pth + '\n')
-            log.writelines('restore from ' + RESTORE_FROM + '\n')
-            model = UNet(NUM_CLASSES)
+            #log = open(LogFile, 'w')
+            #log.writelines('batch size:' + str(BATCH_SIZE) + '\n')
+            #log.writelines(data_list_pth + '\n')
+            #log.writelines('restore from ' + RESTORE_FROM + '\n')
+
+            #TODO make this cleaner later, but for now just load different model if it has the specific name
+
+            if model_id == 'LEAF_UNET_Jun21.pth':
+                model = u_net572.UNet(NUM_CLASSES)
+            elif model_id == 'LEAF_UNET_dilated_Jun21.pth':
+                model = u_net572_dilated.UNet(NUM_CLASSES)
+            elif model_id == 'LEAF_UNET_512_DeepSup_Jun21.pth':
+                model = u_net2.UNet2(NUM_CLASSES)
+            else:
+                model = u_net.UNet(NUM_CLASSES)
             model = nn.DataParallel(model)
             model.to(device)
             saved_state_dict = torch.load(RESTORE_FROM, map_location=lambda storage, loc: storage)
             num_examples = saved_state_dict['example']
 #            print("\tusing running mean and running var")
-            log.writelines("using running mean and running var\n")
+            #log.writelines("using running mean and running var\n")
             model.load_state_dict(saved_state_dict['state_dict'])
             model.eval()
-            log.writelines('preprocessing time: ' + str(time.time() - preprocess_start_time) + '\n')
+            #log.writelines('preprocessing time: ' + str(time.time() - preprocess_start_time) + '\n')
             #print('\nProcessing ' + slidename)
-            log.writelines('Processing ' + slidename + '\n')
+            #log.writelines('Processing ' + slidename + '\n')
             TestTxt = os.path.join(data_list_pth, slidename + '.txt')
             testloader = data.DataLoader(LEAFTest(TestTxt, crop_size=INPUT_SIZE, mean=IMG_MEAN),
                                          batch_size=BATCH_SIZE, shuffle=False, num_workers=16)
@@ -838,7 +924,7 @@ class GUI(tk.Frame):
                         save_npz(npzfile, msk.tocsr())
 
                     batch_time.update(time.time() - end)
-                    end = time.time()
+                    #end)
 
                     if index % 10 == 0:
                         print('Test:[{0}/{1}]\t'
@@ -848,25 +934,46 @@ class GUI(tk.Frame):
 #####################################################################################################################
 
             print('\tThe total test time for ' + slidename + ' is ' + str(batch_time.sum))
-            log.writelines('batch num:' + str(len(testloader)) + '\n')
-            log.writelines('The total test time for ' + slidename + ' is ' + str(batch_time.sum) + '\n')
+            #log.writelines('batch num:' + str(len(testloader)) + '\n')
+            #log.writelines('The total test time for ' + slidename + ' is ' + str(batch_time.sum) + '\n')
             print( '\nPostProcessing now!' )
             
             slide_map_name_npz = slidename + '_Map.npz'
             slide_map_name_png = slidename + '_Map.png'
 
+            postprocess_slide_dir = os.path.join( postprocess_dir,slidename )
+            if not os.path.exists( postprocess_slide_dir ):
+                os.makedirs( postprocess_slide_dir )
+
             # This is the image that the neural net produces
             img = spm.imread(test_img_pth)
             width, height = img.shape[1], img.shape[0]
-            merge_npz(os.path.join(npz_dir), slidename,
-                              os.path.join( whole_npz_dir,slide_map_name_npz ),
-                              int(width), int(height))
+            # combines the individual npz files of each patch into one big npz file per image
+            # saved at slide_map_name_npz, (width and height should be the same as the input image)
+            merge_npz(os.path.join(npz_dir),
+                            slidename,
+                            os.path.join( whole_npz_dir,slide_map_name_npz ),
+                            int(width),
+                            int(height)
+                            )
 
             # saves the output of the neural net once the patches are put together and the background is removed
+            # Takes npz file and saves it as png file in the PredFigPath directory 
             rmbackground2( test_img_pth,leaf_mask_dir,npz_dir_whole,npz_dir_whole_post ) 
-            SavePatchMap( npz_dir_whole_post, PredFigPath, slidename + "_Map.npz")
+            #SavePatchMap( npz_dir_whole_post, PredFigPath, slidename + "_Map.npz")
+            SavePatchMap( npz_dir_whole_post, postprocess_slide_dir, slidename + "_Map.npz")
 
-            pred_img_pth = os.path.join( PredFigPath,slide_map_name_png )
+            #TODO remove NPZ subdirs now?
+            # remove the npz subdirs for each individual image to save space here
+            os.remove( os.path.join( whole_npz_dir,slide_map_name_npz ) )
+            shutil.rmtree( os.path.join( npz_dir,slidename ) )
+            shutil.rmtree( os.path.join( map_dir,slidename ) )
+
+
+            # pred_img_pth is where the png files is previously saved
+            #TODO pred_img_pth to files_to_delete
+            #pred_img_pth = os.path.join( PredFigPath,slide_map_name_png )
+            pred_img_pth = os.path.join( postprocess_slide_dir,slide_map_name_png )
             img = spm.imread(pred_img_pth)
             img = im2vl(img) # This returns binary mask of lesion areas = 1 and background = 0
 
@@ -876,11 +983,13 @@ class GUI(tk.Frame):
             labeled_img = label(img_close, connectivity=2)
 
             #TODO Need to prevent region around the entire leaf
+            # I don't think that this is really a problem
             # combine regions that are close to each other
             labeled_img = self.combineRegions( labeled_img,ref_ecc,pred_img_pth )
 
             # Draw circles around all areas with the same label to fill in any dounuts and crescents
-            pred_img_bgrm_pth = os.path.join( PredFigPath_BgRm,slidename + "_Map.png" )
+            #pred_img_bgrm_pth = os.path.join( PredFigPath_BgRm,slidename + "_Map.png" )
+            pred_img_bgrm_pth = os.path.join( postprocess_slide_dir,slidename + "_Map.png" )
             new_img =  self.drawCircles( labeled_img,pred_img_bgrm_pth )
             # Removing small objects after they have been combined
             #labeled_img = remove_small_objects(labeled_img, min_size=rm_rf_area, connectivity=2)
@@ -969,6 +1078,18 @@ class GUI(tk.Frame):
 
             csv_df = clean_df[df_index:df_index+1]
             if df_index in self.good_df_indices:
+
+                #remove unneeded files for good runs here
+# Files to delete only if segmentation is Good:
+# patches/images/IMG_NAME/
+                shutil.rmtree( os.path.join(patch_image_dir,slidename) )
+# masks/leaf_masks/IMG_NAME
+                os.remove( os.path.join(leaf_mask_dir,('leaf_mask_'+slidename+'.png')) )
+# masks/lesion_masks/IMG_NAME/
+                shutil.rmtree( os.path.join(lesion_mask_dir,slidename) )
+# resultFiles/postprocessing/IMG_NAME/
+                shutil.rmtree( postprocess_slide_dir )
+
                 if good_file_started == False:
                     csv_df.to_csv( result_file,index=False )
                     good_file_started = True
@@ -981,6 +1102,11 @@ class GUI(tk.Frame):
                 else:
                     csv_df.to_csv( bad_result_file,header=False,mode='a',index=False )
 
+
+        # remove the remaining directories that are only removed at the end of a full run
+        shutil.rmtree( patchnet_dir )
+        shutil.rmtree( txt_dir )
+        shutil.rmtree( log_dir )
 
         p.dump( self.imageDF,open(pickle_file,'wb') )
         print( '\tresult_file located :',result_file )
