@@ -804,7 +804,7 @@ class GUI(tk.Frame):
             ref_extent = 0.6  # pre-processing
             rm_rf_area = 5000  # post-processing
             #ref_ecc = 0.92  # post-processing
-            ref_ecc = 0.5  # post-processing
+            ref_ecc = 0.75  # post-processing
             BATCH_SIZE = 32
 
             #test_img_pth = imagelst[0] # name of the image, but starts with a '/'
