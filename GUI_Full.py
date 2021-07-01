@@ -14,7 +14,8 @@ import numpy as np
 import time
 import torch
 from torch.utils import data
-from utils.datasets import LEAFTest
+#from utils.datasets import LEAFTest
+from utils.datasetsFull import LEAFTest
 
 #from model.u_net import UNet
 #from model.u_net2 import UNet2
@@ -812,7 +813,8 @@ class GUI(tk.Frame):
                 patch_size = 572
             #TODO
             #patch_size = 256 
-            INPUT_SIZE = (patch_size, patch_size)
+            #INPUT_SIZE = (patch_size, patch_size)
+            INPUT_SIZE = (256, 342)
             overlap_size = 64
             #TODO look into this
             ref_area = 10000  # pre-processing
@@ -893,7 +895,7 @@ class GUI(tk.Frame):
             #print('\nProcessing ' + slidename)
             #log.writelines('Processing ' + slidename + '\n')
             TestTxt = os.path.join(data_list_pth, slidename + '.txt')
-            testloader = data.DataLoader(LEAFTest(TestTxt, crop_size=INPUT_SIZE, mean=IMG_MEAN),
+            testloader = data.DataLoader(LEAFTest(TestTxt, resize_size=INPUT_SIZE, mean=IMG_MEAN),
                                          batch_size=BATCH_SIZE, shuffle=False, num_workers=16)
             #TODO maybe change these names?
             TestNpzPath = os.path.join(npz_dir, slidename)

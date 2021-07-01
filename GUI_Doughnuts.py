@@ -1074,7 +1074,8 @@ class GUI(tk.Frame):
             imsave(post_img_pth, new_img)
 
             # Draw bounding box
-            cv2.namedWindow(test_img_pth, cv2.WINDOW_NORMAL)
+            #TODO removed namedWindow now so that they don't pop up when testing many images.
+            #cv2.namedWindow(test_img_pth, cv2.WINDOW_NORMAL)
             #imag = cv2.pyrDown(cv2.imread(post_img_pth, cv2.IMREAD_UNCHANGED))
             leaf_img = cv2.imread( test_img_pth )
             imag = cv2.imread(post_img_pth, cv2.IMREAD_UNCHANGED)
