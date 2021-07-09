@@ -9,7 +9,8 @@ from operator import itemgetter
 import pandas as pd
 from openpyxl import load_workbook
 import os
-from leaf_divide_test import process_tif
+from leaf_divide_testFull import process_tif
+#from leaf_divide_test import process_tif
 import numpy as np
 import time
 import torch
@@ -27,7 +28,8 @@ import model.u_net572 as u_net572
 import model.u_net572_dilated as u_net572_dilated
 
 import torch.nn as nn
-from merge_npz_final import merge_npz
+#from merge_npz_final import merge_npz
+from merge_npz_finalFull import merge_npz
 from scipy.sparse import load_npz, save_npz, csr_matrix, coo_matrix
 from scipy.misc import imread, imsave
 import scipy.misc as spm
@@ -128,6 +130,7 @@ def rmbackground2( slide,leaf_mask_dir,npz_dir_whole,npz_dir_whole_post ):
     slideNameMap_npz_pth = os.path.join(npz_dir_whole, slideNameMap_npz)
     SegRes = load_npz(slideNameMap_npz_pth)
     SegRes = SegRes.todense()
+    print( 'SegRes.shape :',SegRes.shape )
     SegRes = np.where( leaf_mask==False,0,SegRes )
 
     save_npz(os.path.join(npz_dir_whole_post, slideNameMap_npz), csr_matrix(SegRes))
@@ -515,7 +518,7 @@ class GUI(tk.Frame):
         self.imageDF[ 'HoursElapsed' ] = hours_elapsed
 
     # This will try to combine regions that are very close to one another
-    def combineRegions( self,labeled_img,ref_ecc,pred_img_pth,expand_ratio=1.025,mal=450 ):
+    def combineRegions( self,labeled_img,ref_ecc,pred_img_pth,expand_ratio=1.1,mal=450 ):
         circle_img = np.asarray( labeled_img,dtype=np.uint8 )
         contours,heir = cv2.findContours( circle_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE )
 
@@ -545,15 +548,19 @@ class GUI(tk.Frame):
         # remove small regions
         new_props = regionprops(labeled_image)
         labeled_img = self.regionAreaFilter( new_props,labeled_image )
+        lab_img_pth = pred_img_pth.replace( '.png','_RegionAreaFilter.png' )
+        imsave( lab_img_pth,labeled_image )
 
         # remove non-circle region
         new_props = regionprops(labeled_image)
         labeled_img = self.circleFilter( new_props,labeled_image,ref_ecc=ref_ecc )
+        lab_img_pth = pred_img_pth.replace( '.png','_NonCircleFilter.png' )
+        imsave( lab_img_pth,labeled_image )
 
         return labeled_img
 
     # remove small regions
-    def regionAreaFilter( self,new_props,labeled_img,min_lesion_area=4000 ):
+    def regionAreaFilter( self,new_props,labeled_img,min_lesion_area=20 ):
         for i, reg in enumerate(new_props):
             if reg.area < min_lesion_area:
                 labeled_img[labeled_img == reg.label] = 0
@@ -571,6 +578,7 @@ class GUI(tk.Frame):
 
         new_labeled_img8 = np.asarray( labeled_img,dtype=np.uint8 )
         contours,heir = cv2.findContours( new_labeled_img8,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE )
+        print( 'len(contours) :',len(contours) )
         #print( 'len( contours ) :',len(contours) )
 
         centers = []
@@ -581,7 +589,7 @@ class GUI(tk.Frame):
 
         new_labeled_img_3d = cv2.cvtColor( new_labeled_img8,cv2.COLOR_GRAY2BGR )
         for c in centers:
-           cv2.circle( new_labeled_img_3d,(int(c[0]),int(c[1])),int(0.65*c[2]),(0,255,0),2 )
+           cv2.circle( new_labeled_img_3d,(int(c[0]),int(c[1])),int(0.7*c[2]),(0,255,0),2 )
         circleimgpath = postProcessed_img_pth.replace( '.png','_circleFill.png' )
         imsave( circleimgpath,new_labeled_img_3d )
 
@@ -796,6 +804,7 @@ class GUI(tk.Frame):
 
         good_file_started = False
         bad_file_started = False
+        file_started = False
         self.bad_df_indices = []
         self.good_df_indices = []
         for df_index,df_row in self.imageDF.iterrows(): 
@@ -811,17 +820,21 @@ class GUI(tk.Frame):
             patch_size = 512
             if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_dilated_Jun21.pth':
                 patch_size = 572
+            if 'LEAF_UNET_FULL256_Jun21.pth' or 'LEAF_UNET_FULL256_July21.pth':
+                patch_size = 256
+            if 'LEAF_UNET_FULL512_Jun21.pth':
+                patch_size = 512
             #TODO
             #patch_size = 256 
-            #INPUT_SIZE = (patch_size, patch_size)
-            INPUT_SIZE = (256, 342)
+            INPUT_SIZE = (patch_size, patch_size)
             overlap_size = 64
             #TODO look into this
             ref_area = 10000  # pre-processing
             ref_extent = 0.6  # pre-processing
             rm_rf_area = 5000  # post-processing
             #ref_ecc = 0.92  # post-processing
-            ref_ecc = 0.85  # post-processing
+            #ref_ecc = 0.85  # post-processing
+            ref_ecc = 0.92  # post-processing
             BATCH_SIZE = 32
 
             #test_img_pth = imagelst[0] # name of the image, but starts with a '/'
@@ -875,7 +888,7 @@ class GUI(tk.Frame):
 
             #TODO make this cleaner later, but for now just load different model if it has the specific name
 
-            if model_id == 'LEAF_UNET_Jun21.pth':
+            if model_id == 'LEAF_UNET_Jun21.pth' or 'LEAF_UNET_FULL_Jun21.pth' or 'LEAF_UNET_FULL512_Jun21.pth' or 'LEAF_UNET_FULL256_Jun21.pth' or 'LEAF_UNET_FULL256_July21.pth':
                 model = u_net572.UNet(NUM_CLASSES)
             elif model_id == 'LEAF_UNET_dilated_Jun21.pth':
                 model = u_net572_dilated.UNet(NUM_CLASSES)
@@ -895,7 +908,8 @@ class GUI(tk.Frame):
             #print('\nProcessing ' + slidename)
             #log.writelines('Processing ' + slidename + '\n')
             TestTxt = os.path.join(data_list_pth, slidename + '.txt')
-            testloader = data.DataLoader(LEAFTest(TestTxt, resize_size=INPUT_SIZE, mean=IMG_MEAN),
+            #testloader = data.DataLoader(LEAFTest(TestTxt, resize_size=INPUT_SIZE, mean=IMG_MEAN),
+            testloader = data.DataLoader(LEAFTest(TestTxt, crop_size=INPUT_SIZE, mean=IMG_MEAN),
                                          batch_size=BATCH_SIZE, shuffle=False, num_workers=16)
             #TODO maybe change these names?
             TestNpzPath = os.path.join(npz_dir, slidename)
@@ -916,6 +930,7 @@ class GUI(tk.Frame):
 
                     for ind in range(0, pred[0].size(0)):
                         prob = torch.squeeze(pred[0][ind]).data.cpu().numpy()
+                        print( 'prob.shape :',prob.shape )
                         prob = coo_matrix(prob)
                         if len(prob.data) == 0:
                             continue
@@ -1036,8 +1051,12 @@ class GUI(tk.Frame):
             imsave(postProcessed_img_pth, new_img)
 
             # Overlap cleaned lesions over original leaf image for saving
-            leaf_img = cv2.imread( test_img_pth )
+            #leaf_img = cv2.imread( test_img_pth )
+#            leaf_img = cv2.imread( test_img_pth )
+            leaf_img = cv2.imread( os.path.join(SlideDir,slidename + '_Full.jpg') )
+            print( 'leaf_img.shape :',leaf_img.shape )
             imag = cv2.imread(postProcessed_img_pth, cv2.IMREAD_UNCHANGED)
+            print( 'imag.shape :',imag.shape )
             gray = cv2.cvtColor( imag,cv2.COLOR_BGR2GRAY )
 
             ret,gray_mask = cv2.threshold( gray,200,255,cv2.THRESH_BINARY_INV )
@@ -1105,8 +1124,16 @@ class GUI(tk.Frame):
                     clean_df = clean_df.drop( columns=[col] )
 
             csv_df = clean_df[df_index:df_index+1]
-            if df_index in self.good_df_indices:
 
+
+
+            if file_started == False:
+                csv_df.to_csv( result_file,index=False )
+                file_started = True
+            else:
+                csv_df.to_csv( result_file,header=False,mode='a',index=False )
+
+            if df_index in self.good_df_indices:
                 #remove unneeded files for good runs here
 # Files to delete only if segmentation is Good:
 # patches/images/IMG_NAME/
@@ -1118,17 +1145,17 @@ class GUI(tk.Frame):
 # resultFiles/postprocessing/IMG_NAME/
                 shutil.rmtree( postprocess_slide_dir )
 
-                if good_file_started == False:
-                    csv_df.to_csv( result_file,index=False )
-                    good_file_started = True
-                else:
-                    csv_df.to_csv( result_file,header=False,mode='a',index=False )
-            else:
-                if bad_file_started == False:
-                    csv_df.to_csv( bad_result_file,index=False )
-                    bad_file_started = True
-                else:
-                    csv_df.to_csv( bad_result_file,header=False,mode='a',index=False )
+           #     if good_file_started == False:
+           #         csv_df.to_csv( result_file,index=False )
+           #         good_file_started = True
+           #     else:
+           #         csv_df.to_csv( result_file,header=False,mode='a',index=False )
+           # else:
+           #     if bad_file_started == False:
+           #         csv_df.to_csv( bad_result_file,index=False )
+           #         bad_file_started = True
+           #     else:
+           #         csv_df.to_csv( bad_result_file,header=False,mode='a',index=False )
 
 
         # remove the remaining directories that are only removed at the end of a full run

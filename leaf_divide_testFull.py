@@ -26,10 +26,10 @@ def divide_slide(img, filename, imgpath, thread_index, ranges, r_list, c_list, l
         c = c_list[shard]
 
         try:
-            topy = int(r-patch_size/2)
-            buttomy = int(topy+patch_size)
-            leftx = int(c-patch_size/2)
-            rightx = int(leftx+patch_size)
+            topy = int(r-patch_size[0]/2)
+            buttomy = int(topy+patch_size[0])
+            leftx = int(c-patch_size[1]/2)
+            rightx = int(leftx+patch_size[1])
             if topy<0 or leftx<0 or buttomy>img.shape[0] or rightx>img.shape[1]:
                 print('Out of Index: ('+ str(leftx) + ',' + str(topy) + ") for " + filename)
                 log.writelines('Out of Index: ('+ str(leftx) + ',' + str(topy) + ") for " + filename+'\n')
@@ -57,7 +57,24 @@ def process_tif( file,filename,patch_image_dir,log,patch_size,overlap_size,ref_e
     # else:
     #     return
     #img = scipy.misc.imread(file)
+
+    img = cv2.imread(file)
+    r,c,_ = img.shape
+    square_size = np.min([r,c])
+    ss2 = square_size/2
+    r2 = r/2
+    rs = int(r2-ss2)
+    re = int(r2+ss2)
+    c2 = c/2
+    cs = int(c2-ss2)
+    ce = int(c2+ss2)
+
     low_dim_img = Image.open(file)
+    low_dim_img = low_dim_img.crop((rs,cs,re,ce))
+
+    #low_dim_img = low_dim_img.resize((256,342))
+    low_dim_img = low_dim_img.resize((patch_size,patch_size))
+    #low_dim_img = low_dim_img.resize((patch_size,patch_size))
     ## HSV is Hue[0,179], Saturation[0,255], Value[0,255]
     low_hsv_img = low_dim_img.convert('HSV')
     _, low_s, _ = low_hsv_img.split()
@@ -68,7 +85,19 @@ def process_tif( file,filename,patch_image_dir,log,patch_size,overlap_size,ref_e
     #############################################################################################################################
     #############################################################################################################################
     img = cv2.imread(file)
-    img = cv2.resize(img,patch_size)
+
+    r,c,_ = img.shape
+    square_size = np.min([r,c])
+    ss2 = square_size/2
+    r2 = r/2
+    rs = int(r2-ss2)
+    re = int(r2+ss2)
+    c2 = c/2
+    cs = int(c2-ss2)
+    ce = int(c2+ss2)
+    img = img[rs:re,cs:ce]
+
+    img = cv2.resize(img,(patch_size,patch_size))
     # HSV is Hue[0,179], Saturation[0,255], Value[0,255]
     hsv_img = cv2.cvtColor( img,cv2.COLOR_BGR2HSV )
     hue = hsv_img[:,:,0]
@@ -102,6 +131,10 @@ def process_tif( file,filename,patch_image_dir,log,patch_size,overlap_size,ref_e
     #############################################################################################################################
     #############################################################################################################################
     #############################################################################################################################
+
+    imagename = os.path.join(imgpath, filename[:-4] + '_Full.jpg')
+    #img.save(imagename, "JPEG")
+    cv2.imwrite(imagename, img)
 
 
     ## --OSTU threshold
@@ -150,100 +183,100 @@ def process_tif( file,filename,patch_image_dir,log,patch_size,overlap_size,ref_e
 
     #########################################################################################################################
     # divide low_s
-    h = low_s.height
-    w = low_s.width
-    # h OR w = 500 + 450k + R
-    h_k = (h - patch_size) // (patch_size - overlap_size)
-    h_R = (h - patch_size) % (patch_size - overlap_size)
-    if h_R <= overlap_size:
-        h_flag = 0
-    else:
-        h_flag = 1
-    w_k = (w - patch_size) // (patch_size - overlap_size)
-    w_R = (w - patch_size) % (patch_size - overlap_size)
-    if w_R <= overlap_size:
-        w_flag = 0
-    else:
-        w_flag = 1
+    #h = low_s.height
+    #w = low_s.width
+    ## h OR w = 500 + 450k + R
+    #h_k = (h - patch_size) // (patch_size - overlap_size)
+    #h_R = (h - patch_size) % (patch_size - overlap_size)
+    #if h_R <= overlap_size:
+    #    h_flag = 0
+    #else:
+    #    h_flag = 1
+    #w_k = (w - patch_size) // (patch_size - overlap_size)
+    #w_R = (w - patch_size) % (patch_size - overlap_size)
+    #if w_R <= overlap_size:
+    #    w_flag = 0
+    #else:
+    #    w_flag = 1
 
-    h_list = []
-    h_list.append(patch_size / 2)
+    #h_list = []
+    #h_list.append(patch_size / 2)
 
-    for i in range(1, h_k + 1):
-        h_list.append(patch_size / 2 + (patch_size - overlap_size) * i)
+    #for i in range(1, h_k + 1):
+    #    h_list.append(patch_size / 2 + (patch_size - overlap_size) * i)
 
-    if not h_flag:
-        if h_k >= 1:
-            h_list.remove(patch_size / 2 + (patch_size - overlap_size) * h_k)
-        h_list.append(h - patch_size / 2)
-    else:
-        h_list.append(h - patch_size / 2)
+    #if not h_flag:
+    #    if h_k >= 1:
+    #        h_list.remove(patch_size / 2 + (patch_size - overlap_size) * h_k)
+    #    h_list.append(h - patch_size / 2)
+    #else:
+    #    h_list.append(h - patch_size / 2)
 
-    w_list = []
-    w_list.append(patch_size / 2)
+    #w_list = []
+    #w_list.append(patch_size / 2)
 
-    for j in range(1, w_k + 1):
-        w_list.append(patch_size / 2 + (patch_size - overlap_size) * j)
+    #for j in range(1, w_k + 1):
+    #    w_list.append(patch_size / 2 + (patch_size - overlap_size) * j)
 
-    if not w_flag:
-        if w_k >= 1:
-            w_list.remove(patch_size / 2 + (patch_size - overlap_size) * w_k)
-        w_list.append(w - patch_size / 2)
-    else:
-        w_list.append(w - patch_size / 2)
+    #if not w_flag:
+    #    if w_k >= 1:
+    #        w_list.remove(patch_size / 2 + (patch_size - overlap_size) * w_k)
+    #    w_list.append(w - patch_size / 2)
+    #else:
+    #    w_list.append(w - patch_size / 2)
 
-    [r_list, c_list] = np.meshgrid(h_list, w_list)
-    r_list = r_list.flatten()
-    c_list = c_list.flatten()
-    # makes a grid of all of the patches x,y
-    #########################################################################################################################
+    #[r_list, c_list] = np.meshgrid(h_list, w_list)
+    #r_list = r_list.flatten()
+    #c_list = c_list.flatten()
+    ## makes a grid of all of the patches x,y
+    ##########################################################################################################################
 
-    tar_r_list = []
-    tar_c_list = []
+    #tar_r_list = []
+    #tar_c_list = []
 
-    for i in range(len(r_list)):
-        r = r_list[i]
-        c = c_list[i]
-        topy = int(r - patch_size / 2)
-        buttomy = int(r + patch_size / 2)
-        leftx = int(c - patch_size / 2)
-        rightx = int(c + patch_size / 2)
-        low_patch = low_s_bin[topy:buttomy, leftx:rightx]
-        if np.sum(low_patch):
-            tar_r_list.append(r)
-            tar_c_list.append(c)
+    #for i in range(len(r_list)):
+    #    r = r_list[i]
+    #    c = c_list[i]
+    #    topy = int(r - patch_size / 2)
+    #    buttomy = int(r + patch_size / 2)
+    #    leftx = int(c - patch_size / 2)
+    #    rightx = int(c + patch_size / 2)
+    #    low_patch = low_s_bin[topy:buttomy, leftx:rightx]
+    #    if np.sum(low_patch):
+    #        tar_r_list.append(r)
+    #        tar_c_list.append(c)
 
-    # patch start and end coords
-    #########################################################################################################################
+    ## patch start and end coords
+    ##########################################################################################################################
 
-    r_list = tar_r_list
-    c_list = tar_c_list
+    #r_list = tar_r_list
+    #c_list = tar_c_list
 
-    # print(time() - start, 's')
-    num_threads = 64
-    num_patches = len(r_list)
-    print('\tSplit into {} patches.'.format(num_patches) )
-    log.writelines('num_patches : ' + str(num_patches) + '\n')
+    ## print(time() - start, 's')
+    #num_threads = 64
+    #num_patches = len(r_list)
+    #print('\tSplit into {} patches.'.format(num_patches) )
+    #log.writelines('num_patches : ' + str(num_patches) + '\n')
 
-    spacing = np.linspace(0, num_patches, num_threads + 1).astype(np.int)
-    ranges = []
-    for i in range(len(spacing) - 1):
-        ranges.append([spacing[i], spacing[i + 1]])
+    #spacing = np.linspace(0, num_patches, num_threads + 1).astype(np.int)
+    #ranges = []
+    #for i in range(len(spacing) - 1):
+    #    ranges.append([spacing[i], spacing[i + 1]])
 
-    img = cv2.cvtColor( img,cv2.COLOR_BGR2RGB )
-    threads = []
-    for thread_index in range(len(ranges)):
-        args = (img, filename, imgpath, thread_index, ranges, r_list, c_list, log, patch_size)
-        t = threading.Thread(target=divide_slide, args=args)
-        t.setDaemon(True)
-        threads.append(t)
+    #img = cv2.cvtColor( img,cv2.COLOR_BGR2RGB )
+    #threads = []
+    #for thread_index in range(len(ranges)):
+    #    args = (img, filename, imgpath, thread_index, ranges, r_list, c_list, log, patch_size)
+    #    t = threading.Thread(target=divide_slide, args=args)
+    #    t.setDaemon(True)
+    #    threads.append(t)
 
-    for t in threads:
-        t.start()
+    #for t in threads:
+    #    t.start()
 
-    # Wait for all the threads to terminate.
-    for t in threads:
-        t.join()
+    ## Wait for all the threads to terminate.
+    #for t in threads:
+    #    t.join()
 
     stop = time()
     print('\tPreprocessing time : ' + str(stop - start))
