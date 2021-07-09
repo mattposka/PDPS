@@ -428,8 +428,10 @@ class GUI(tk.Frame):
             imagemat.append( [imname,i,cameraID,year,month,day,hour] )
 
         self.imageDF = pd.DataFrame( imagemat,columns=['name','filename','cameraID','year','month','day','hour',] )
-        self.imageDF.sort_values( by=['cameraID','year','month','day','hour'] )
+        self.imageDF = self.imageDF.sort_values( by=['cameraID','year','month','day','hour'] )
         self.imageDF['index_num'] = np.arange( len(self.imageDF) )
+        self.imageDF = self.imageDF.reset_index(drop=True)
+        #print( 'self.imageDF :',self.imageDF)
         imagelst = self.imageDF['filename']
         return imagelst
 
@@ -561,7 +563,7 @@ class GUI(tk.Frame):
         return labeled_img
 
     # remove small regions
-    def regionAreaFilter( self,new_props,labeled_img,min_lesion_area=20 ):
+    def regionAreaFilter( self,new_props,labeled_img,min_lesion_area=35 ):
         for i, reg in enumerate(new_props):
             if reg.area < min_lesion_area:
                 labeled_img[labeled_img == reg.label] = 0
@@ -579,7 +581,7 @@ class GUI(tk.Frame):
 
         new_labeled_img8 = np.asarray( labeled_img,dtype=np.uint8 )
         contours,heir = cv2.findContours( new_labeled_img8,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE )
-        print( 'len(contours) :',len(contours) )
+        #print( 'len(contours) :',len(contours) )
         #print( 'len( contours ) :',len(contours) )
 
         centers = []
@@ -606,7 +608,10 @@ class GUI(tk.Frame):
         p.dump( contour_arr,open(con_sav_pth1,'wb') )
 
         # This is where the largest [num_lesions] lesions are kept
-        contour_arr = contour_arr[ contour_arr[:,7].argsort() ][-self.num_lesions:,:]
+        # also sorts by y and x values
+        #contour_arr = contour_arr[ contour_arr[:,7].argsort() ][-self.num_lesions:,:]
+        contour_arr = contour_arr[contour_arr[:, 7].argsort()][:-1,:] #remove the biggest region because it is background
+        contour_arr = contour_arr[contour_arr[:,7].argsort()][-self.num_lesions:,:]
         contour_arr = contour_arr[ contour_arr[:,5].argsort() ]
         contour_arr = contour_arr[ contour_arr[:,6].argsort(kind='mergesort') ]
 
@@ -623,27 +628,50 @@ class GUI(tk.Frame):
                         (self.imageDF['year']==self.imageDF.loc[df_index,'year']) &
                         (self.imageDF['month']==self.imageDF.loc[df_index,'month']) &
                         (self.imageDF['day']==self.imageDF.loc[df_index,'day']) &
-                        (self.imageDF['index_num']<df_index) &
-                        (self.imageDF['index_num'].isin(self.good_df_indices))
+                        #(self.imageDF['index_num']<df_index) &
+                        (self.imageDF['index_num'] < df_index)
+                        #TODO maybe we still want to only compare against prev good imgs?
+                        #(self.imageDF['index_num'].isin(self.good_df_indices))
+                        #(self.imageDF['index_num'].isin(self.good_df_indices))
                         ]
         # Here contours_ordered will be:
         # [ w*h,x,y,x+w,y+h,cx,cy,area ]
         if len(prev_img_df) > 0:
+            prev_img_df = prev_img_df.reset_index(drop=True)
+            #print('HERE@@@@@@@@@@')
+            pd.set_option('display.max_columns', None)
+            #print('prev_img_df :',prev_img_df)
             dfl = len( prev_img_df )
+            #print( 'dfl-1 :',prev_img_df.iloc[dfl-1,:])
             contours_reordered = np.zeros( shape=(self.num_lesions,8) )
+            lesion_number_taken = []
             for i in range( self.num_lesions ):
-                xs = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xstart']
-                xe = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xend']
-                ys = prev_img_df.at[dfl-1,'l'+str(i+1)+'_ystart']
-                ye = prev_img_df.at[dfl-1,'l'+str(i+1)+'_yend']
+                #print('i :',i)
+                #xs = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xstart']
+                #xe = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xend']
+                #ys = prev_img_df.at[dfl-1,'l'+str(i+1)+'_ystart']
+                #ye = prev_img_df.at[dfl-1,'l'+str(i+1)+'_yend']
+                xs = prev_img_df.at[dfl - 1, 'l' + str(i + 1) + '_xstart']
+                xe = prev_img_df.at[dfl - 1, 'l' + str(i + 1) + '_xend']
+                ys = prev_img_df.at[dfl - 1, 'l' + str(i + 1) + '_ystart']
+                ye = prev_img_df.at[dfl - 1, 'l' + str(i + 1) + '_yend']
+                #print('xs,xe,ys,ye :',xs,xe,ys,ye)
 
                 found = False
-                for j in range( len(contours_ordered) ):
-                    cx = contours_ordered[j,5]
-                    cy = contours_ordered[j,6]
-                    if cx > xs and cx < xe and cy > ys and cy < ye and found == False:
-                        contours_reordered[i,:] = contours_ordered[j,:]
-                        found = True
+                if xs != 0 and xe != 0 and ys != 0 and ye != 0:
+                    for j in range( len(contours_ordered) ):
+                        cx = contours_ordered[j,5]
+                        cy = contours_ordered[j,6]
+                        if cx > xs and cx < xe and cy > ys and cy < ye and found == False:
+                            contours_reordered[i,:] = contours_ordered[j,:]
+                            found = True
+                            lesion_number_taken.append(j)
+                else:
+                    for j in range( len(contours_ordered) ):
+                        if j not in lesion_number_taken and found == False:
+                            contours_reordered[i,:] = contours_ordered[j,:]
+                            lesion_number_taken.append(j)
+                            found = True
         else:
             contours_reordered = contours_ordered
         return contours_reordered
@@ -660,15 +688,25 @@ class GUI(tk.Frame):
                 self.imageDF.at[ df_index,'l'+str(l+1)+'_xend' ] = contours_reordered[l,3]
                 self.imageDF.at[ df_index,'l'+str(l+1)+'_ystart' ] = contours_reordered[l,2]
                 self.imageDF.at[ df_index,'l'+str(l+1)+'_yend' ] = contours_reordered[l,4]
+            else:
+                area_str = 'l'+str(l+1)+'_area'
+                self.imageDF.at[ df_index,area_str ] = 0
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_centerX' ] = 0
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_centerY' ] = 0
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_xstart' ] = 0
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_xend' ] = 0
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_ystart' ] = 0
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_yend' ] = 0
 
-        slf_size = 1000
-        slf = contours_reordered[:self.num_lesions,7]
-        too_small = False
-        for i in slf:
-            if i < 1000:
-                too_small = True
+        #slf_size = 1000
+        #slf = contours_reordered[:self.num_lesions,7]
+        #too_small = False
+        #for i in slf:
+        #    if i < 1000:
+        #        too_small = True
 
-        if len( contours_reordered ) < self.num_lesions or 0 in contours_reordered or too_small == True:
+        #if len( contours_reordered ) < self.num_lesions or 0 in contours_reordered or too_small == True:
+        if len(contours_reordered) < self.num_lesions or 0 in contours_reordered:
             self.bad_df_indices.append( df_index )
         else:
             self.good_df_indices.append( df_index )
@@ -676,7 +714,7 @@ class GUI(tk.Frame):
     # draw rectangles around the lesions
     def drawRecsAndSaveImg( self,contours_reordered,im_to_write,imgsWLesions_dir,df_index ):
         for j in range( len(contours_reordered) ):
-            cv2.putText(im_to_write, str(j+1), (int(contours_reordered[j,5]), int(contours_reordered[j,6])), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 0, 0), 5)
+            cv2.putText(im_to_write, str(j+1), (int(contours_reordered[j,5]), int(contours_reordered[j,6])), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 0), 1)
             start = (int(contours_reordered[j,1]),int(contours_reordered[j,2]))
             end = (int(contours_reordered[j,3]),int(contours_reordered[j,4]))
             color = (0,0,0)
@@ -809,6 +847,9 @@ class GUI(tk.Frame):
         file_started = False
         self.bad_df_indices = []
         self.good_df_indices = []
+
+        #print('self.imageDF[name] :',self.imageDF['name'])
+
         for df_index,df_row in self.imageDF.iterrows(): 
             print( '\nCompleted {}/{} images'.format( df_index,len(self.imageDF) ) )
             # input
@@ -822,17 +863,17 @@ class GUI(tk.Frame):
             patch_size = 512
             if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_dilated_Jun21.pth':
                 patch_size = 572
-                print('HERE0')
+                #print('HERE0')
             if model_id == 'LEAF_UNET_FULL256_Jun21.pth' or model_id == 'LEAF_UNET_FULL256_July21.pth':
                 patch_size = 256
-                print('HERE1')
+                #print('HERE1')
             if model_id == 'LEAF_UNET_FULL512_Jun21.pth':
                 patch_size = 512
-                print('HERE2')
+                #print('HERE2')
             #TODO
             #patch_size = 256 
             INPUT_SIZE = (patch_size, patch_size)
-            print('INPUT_SIZE :',INPUT_SIZE)
+            #print('INPUT_SIZE :',INPUT_SIZE)
             overlap_size = 64
             #TODO look into this
             ref_area = 10000  # pre-processing
@@ -936,7 +977,7 @@ class GUI(tk.Frame):
 
                     for ind in range(0, pred[0].size(0)):
                         prob = torch.squeeze(pred[0][ind]).data.cpu().numpy()
-                        print( 'prob.shape :',prob.shape )
+                        #print( 'prob.shape :',prob.shape )
                         prob = coo_matrix(prob)
                         if len(prob.data) == 0:
                             continue
@@ -959,7 +1000,7 @@ class GUI(tk.Frame):
                         ##################################################################
                         npzname = name[ind].replace('.jpg', '_N' + str(num_examples) + '_MSK.npz')
                         npzfile = os.path.join(TestNpzPath, npzname)
-                        print('npzfile :',npzfile)
+                        #print('npzfile :',npzfile)
                         save_npz(npzfile, msk.tocsr())
 
                     batch_time.update(time.time() - end)
@@ -990,7 +1031,7 @@ class GUI(tk.Frame):
             # save original leaf image
             ##################################################################################################
             img = spm.imread(test_img_pth)
-            print( 'test_img_pth :',test_img_pth )
+            #print( 'test_img_pth :',test_img_pth )
             o_img_pth = os.path.join( postprocess_slide_dir,slidename+'_Original.png' )
             plt.imsave( o_img_pth,img )
             ##################################################################################################
@@ -1061,9 +1102,9 @@ class GUI(tk.Frame):
             #leaf_img = cv2.imread( test_img_pth )
 #            leaf_img = cv2.imread( test_img_pth )
             leaf_img = cv2.imread( os.path.join(SlideDir,slidename + '_Full.jpg') )
-            print( 'leaf_img.shape :',leaf_img.shape )
+            #print( 'leaf_img.shape :',leaf_img.shape )
             imag = cv2.imread(postProcessed_img_pth, cv2.IMREAD_UNCHANGED)
-            print( 'imag.shape :',imag.shape )
+            #print( 'imag.shape :',imag.shape )
             gray = cv2.cvtColor( imag,cv2.COLOR_BGR2GRAY )
 
             ret,gray_mask = cv2.threshold( gray,200,255,cv2.THRESH_BINARY_INV )
@@ -1088,31 +1129,52 @@ class GUI(tk.Frame):
             # List all the contours here
             # Here contour_arr will be:
             # [ w*h,x,y,x+w,y+h,cx,cy,area ]
-            contour_arr = np.zeros( shape=(len(stats),8) )
-            for i in range( len(stats) ):
+            #contour_arr = np.zeros( shape=(len(stats),8) )
+            #for i in range( len(stats) ):
+            #    # ignore the first entry because it is the background
+            #    if i > 0:
+            #        # get the bounding rect
+            #        x = stats[i,0]
+            #        y = stats[i,1]
+            #        w = stats[i,2]
+            #        h = stats[i,3]
+   #
+            #        contour_arr[i,:5] = [ w*h,x,y,x+w,y+h ]
+            #        rect_list.append([w * h, (x, y), (x + w, y + h)])
+   #
+            #        cx = centroid[i,0]
+            #        cy = centroid[i,1]
+            #        contour_arr[i,5:-1] = [ int(cx),int(cy) ]
+            #        contour_arr[i,7] = stats[i,4]
+
+            contour_arr = np.zeros(shape=(len(stats), 8))
+            for i in range(len(stats)):
                 # ignore the first entry because it is the background
-                if i > 0:
-                    # get the bounding rect
-                    x = stats[i,0]
-                    y = stats[i,1]
-                    w = stats[i,2]
-                    h = stats[i,3]
-    
-                    contour_arr[i,:5] = [ w*h,x,y,x+w,y+h ]
-                    rect_list.append([w * h, (x, y), (x + w, y + h)])
-    
-                    cx = centroid[i,0]
-                    cy = centroid[i,1]
-                    contour_arr[i,5:-1] = [ int(cx),int(cy) ]
-                    contour_arr[i,7] = stats[i,4]
+
+                # get the bounding rect
+                x = stats[i, 0]
+                y = stats[i, 1]
+                w = stats[i, 2]
+                h = stats[i, 3]
+
+                contour_arr[i, :5] = [w * h, x, y, x + w, y + h]
+                rect_list.append([w * h, (x, y), (x + w, y + h)])
+
+                cx = centroid[i, 0]
+                cy = centroid[i, 1]
+                contour_arr[i, 5:-1] = [int(cx), int(cy)]
+                contour_arr[i, 7] = stats[i, 4]
     
             sought = [0, 0, 255]
             lesion = []
 
+            #print('contour_arr :',contour_arr)
             # Sort by contour size and take n_lesion largest areas, then sort by x+y locations
             contours_ordered = self.sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index )
+            #print('contours_ordered :',contours_ordered)
             # check if lesions are in the same order
             contours_reordered = self.checkLesionOrder( df_index,contours_ordered )
+            #print('contours_reordered :',contours_reordered)
 
             # add reordered contours to the DF
             self.addContoursToDF( contours_reordered,df_index )
@@ -1132,7 +1194,10 @@ class GUI(tk.Frame):
 
             csv_df = clean_df[df_index:df_index+1]
 
-
+            postprocess_files = glob.glob(postprocess_slide_dir+'/*')
+            for f in postprocess_files:
+                if 'OSeg.png' not in f:
+                    os.remove(f)
 
             if file_started == False:
                 csv_df.to_csv( result_file,index=False )

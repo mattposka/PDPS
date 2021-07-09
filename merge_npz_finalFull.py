@@ -51,12 +51,12 @@ def merge_npz(npzpath, dir, npzname, width, height):
 
             #npzfile = load_npz(dirpath, npz)
         npz = npzfileslist[0][0]
-        print( 'npz :',npz )
+        #print( 'npz :',npz )
         npzfile = load_npz(os.path.join(dirpath, npz))
         npzfile = npzfile.todense()
         npzfile = coo_matrix(npzfile)
 
-        print('npzname :',npzname)
+        #print('npzname :',npzname)
         save_npz(npzname, npzfile.tocsr())
     #segment = 1
     #if num_npz > 1000:
