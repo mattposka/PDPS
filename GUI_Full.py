@@ -128,6 +128,7 @@ def rmbackground2( slide,leaf_mask_dir,npz_dir_whole,npz_dir_whole_post ):
 
     slideNameMap_npz = SlideName.replace(".png", "_Map.npz")
     slideNameMap_npz_pth = os.path.join(npz_dir_whole, slideNameMap_npz)
+    print('slideNameMap_npz_pth :',slideNameMap_npz_pth)
     SegRes = load_npz(slideNameMap_npz_pth)
     SegRes = SegRes.todense()
     print( 'SegRes.shape :',SegRes.shape )
@@ -650,14 +651,15 @@ class GUI(tk.Frame):
     # Adds reordered contours to the DF
     def addContoursToDF( self,contours_reordered,df_index ):
         for l in range( self.num_lesions ):
-            area_str = 'l'+str(l+1)+'_area'
-            self.imageDF.at[ df_index,area_str ] = contours_reordered[l,7]
-            self.imageDF.at[ df_index,'l'+str(l+1)+'_centerX' ] = contours_reordered[l,5]
-            self.imageDF.at[ df_index,'l'+str(l+1)+'_centerY' ] = contours_reordered[l,6]
-            self.imageDF.at[ df_index,'l'+str(l+1)+'_xstart' ] = contours_reordered[l,1]
-            self.imageDF.at[ df_index,'l'+str(l+1)+'_xend' ] = contours_reordered[l,3]
-            self.imageDF.at[ df_index,'l'+str(l+1)+'_ystart' ] = contours_reordered[l,2]
-            self.imageDF.at[ df_index,'l'+str(l+1)+'_yend' ] = contours_reordered[l,4]
+            if l < len(contours_reordered):
+                area_str = 'l'+str(l+1)+'_area'
+                self.imageDF.at[ df_index,area_str ] = contours_reordered[l,7]
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_centerX' ] = contours_reordered[l,5]
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_centerY' ] = contours_reordered[l,6]
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_xstart' ] = contours_reordered[l,1]
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_xend' ] = contours_reordered[l,3]
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_ystart' ] = contours_reordered[l,2]
+                self.imageDF.at[ df_index,'l'+str(l+1)+'_yend' ] = contours_reordered[l,4]
 
         slf_size = 1000
         slf = contours_reordered[:self.num_lesions,7]
@@ -820,13 +822,17 @@ class GUI(tk.Frame):
             patch_size = 512
             if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_dilated_Jun21.pth':
                 patch_size = 572
-            if 'LEAF_UNET_FULL256_Jun21.pth' or 'LEAF_UNET_FULL256_July21.pth':
+                print('HERE0')
+            if model_id == 'LEAF_UNET_FULL256_Jun21.pth' or model_id == 'LEAF_UNET_FULL256_July21.pth':
                 patch_size = 256
-            if 'LEAF_UNET_FULL512_Jun21.pth':
+                print('HERE1')
+            if model_id == 'LEAF_UNET_FULL512_Jun21.pth':
                 patch_size = 512
+                print('HERE2')
             #TODO
             #patch_size = 256 
             INPUT_SIZE = (patch_size, patch_size)
+            print('INPUT_SIZE :',INPUT_SIZE)
             overlap_size = 64
             #TODO look into this
             ref_area = 10000  # pre-processing
@@ -953,6 +959,7 @@ class GUI(tk.Frame):
                         ##################################################################
                         npzname = name[ind].replace('.jpg', '_N' + str(num_examples) + '_MSK.npz')
                         npzfile = os.path.join(TestNpzPath, npzname)
+                        print('npzfile :',npzfile)
                         save_npz(npzfile, msk.tocsr())
 
                     batch_time.update(time.time() - end)
@@ -996,19 +1003,19 @@ class GUI(tk.Frame):
             # saved at slide_map_name_npz, (width and height should be the same as the input image)
             merge_npz(os.path.join(npz_dir),
                             slidename,
-                            os.path.join( whole_npz_dir,slide_map_name_npz ),
+                            os.path.join( npz_dir_whole_post,slide_map_name_npz ),
                             int(width),
                             int(height)
                             )
 
             # saves the output of the neural net once the patches are put together and the background is removed
             # Takes npz file and saves it as png file in the PredFigPath directory 
-            rmbackground2( test_img_pth,leaf_mask_dir,npz_dir_whole,npz_dir_whole_post ) 
+
             SavePatchMap( npz_dir_whole_post, postprocess_slide_dir, slidename + "_Map.npz")
 
             #TODO remove NPZ subdirs now?
             # remove the npz subdirs for each individual image to save space here
-            os.remove( os.path.join( whole_npz_dir,slide_map_name_npz ) )
+            #os.remove( os.path.join( whole_npz_dir,slide_map_name_npz ) )
             shutil.rmtree( os.path.join( npz_dir,slidename ) )
             shutil.rmtree( os.path.join( map_dir,slidename ) )
 

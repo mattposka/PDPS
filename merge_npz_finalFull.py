@@ -56,6 +56,7 @@ def merge_npz(npzpath, dir, npzname, width, height):
         npzfile = npzfile.todense()
         npzfile = coo_matrix(npzfile)
 
+        print('npzname :',npzname)
         save_npz(npzname, npzfile.tocsr())
     #segment = 1
     #if num_npz > 1000:
