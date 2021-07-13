@@ -18,45 +18,14 @@ import matplotlib.pyplot as plt
 import scipy.stats as ss
 import pickle as p
 
-
-def divide_slide(img, filename, imgpath, thread_index, ranges, r_list, c_list, log, patch_size):
-    for s in range(ranges[thread_index][0], ranges[thread_index][1]):
-        shard = s
-        r = r_list[shard]
-        c = c_list[shard]
-
-        try:
-            topy = int(r-patch_size[0]/2)
-            buttomy = int(topy+patch_size[0])
-            leftx = int(c-patch_size[1]/2)
-            rightx = int(leftx+patch_size[1])
-            if topy<0 or leftx<0 or buttomy>img.shape[0] or rightx>img.shape[1]:
-                print('Out of Index: ('+ str(leftx) + ',' + str(topy) + ") for " + filename)
-                log.writelines('Out of Index: ('+ str(leftx) + ',' + str(topy) + ") for " + filename+'\n')
-                continue
-
-            imgarr = img[topy:buttomy, leftx:rightx]
-            image = Image.fromarray(imgarr)
-            image = image.convert('RGB')
-        except:
-            print("Can not read the point (" + str(leftx) + ',' + str(topy) + ") for " + filename)
-            log.writelines("Can not read the point (" + str(leftx) + ',' + str(topy) + ") for " + filename + '\n')
-            continue
-        else:
-            imagename = os.path.join(imgpath, filename[:-4] + '_' + str(leftx) + '_' + str(topy) + '.jpg')
-            image.save(imagename, "JPEG")
-
-
 # process_tif - 
 def process_tif( file,filename,patch_image_dir,log,patch_size,overlap_size,ref_extent,ref_area,leaf_mask_dir='' ):
     print( '\nPreprocessing',filename )
     start = time()
+
     imgpath = os.path.join(patch_image_dir, filename[:-4])
     if not os.path.exists(imgpath):
         os.mkdir(imgpath)
-    # else:
-    #     return
-    #img = scipy.misc.imread(file)
 
     img = cv2.imread(file)
     r,c,_ = img.shape
@@ -111,19 +80,17 @@ def process_tif( file,filename,patch_image_dir,log,patch_size,overlap_size,ref_e
     
     # only keep the largest connected component
     closed_mask = closing( mask,square(3) )
-    
-    labeled_img = label(closed_mask, connectivity=2)
+    labeled_mask = label(closed_mask, connectivity=2)
 
     # leaf area should be the second largest number, with background being the most common
-    mode_label,count = ss.mode( labeled_img,axis=None )
+    mode_label,count = ss.mode( labeled_mask,axis=None )
     # remove the most common label here
-    labeled_img_filtered = np.where( labeled_img==mode_label,np.nan,labeled_img )
-    mode_label,count = ss.mode( labeled_img_filtered,axis=None,nan_policy='omit' )
+    labeled_mask_filtered = np.where( labeled_mask==mode_label,np.nan,labeled_mask )
+    mode_label,count = ss.mode( labeled_mask_filtered,axis=None,nan_policy='omit' )
     leaf_label = mode_label
 
-    leaf_mask = np.where( labeled_img==leaf_label,True,False )
-    low_s_bin = leaf_mask.copy()
-    maskpth = os.path.join( leaf_mask_dir,('leaf_mask_'+filename) )
+    leaf_mask = np.where( labeled_mask==leaf_label,True,False )
+    maskpth = os.path.join( leaf_mask_dir,(filename.replace('.png','')+'_mask.png') )
     plt.imsave( maskpth,leaf_mask )
 
     maskpth_p = maskpth.replace( '.png','.p' )
@@ -133,150 +100,7 @@ def process_tif( file,filename,patch_image_dir,log,patch_size,overlap_size,ref_e
     #############################################################################################################################
 
     imagename = os.path.join(imgpath, filename[:-4] + '_Full.jpg')
-    #img.save(imagename, "JPEG")
     cv2.imwrite(imagename, img)
-
-
-    ## --OSTU threshold
-    ## OSTU thresholding separates the foreground from the background
-    #low_s_thre = filters.threshold_otsu(np.array(low_s))
-    #print( '(ldTe) low_s_thre :',low_s_thre )
-    #low_s_bin = low_s > low_s_thre  # row is y and col is x
-    #print( '(ldTe) low_s_bin.shape :',low_s_bin.shape )
-    #print( '(ldTe) low_s_bin :',low_s_bin )
-
-    ## only keep the largest connected component
-    ## TODO what does this mean?
-    #low_s_bin = closing(low_s_bin, square(3))
-    #labeled_img = label(low_s_bin, connectivity=2)
-
-    #props = regionprops(labeled_img)
-    #print( 'props :',props )
-    #area_list = np.zeros(len(props))
-    #for i, reg in enumerate(props):  # i+1 is the label
-    #    area_list[i] = reg.area
-    ## sort
-    #area_list = area_list.argsort()[::-1]
-    #label_id = -1
-    #label_area = 0
-    #extent = 0
-    #for i in area_list:
-    #    extent = props[i].extent
-    #    if extent > ref_extent:
-    #        label_id = i + 1
-    #        label_area = props[i].area
-    #        break
-    #if label_id == -1 or label_area < ref_area:
-    #    print("name:", file)
-    #    print("extent:", extent)
-    #    print("area", label_area)
-    #assert label_id != -1, "fail to find the leaf region in pre-processing!" \
-    #                       "try to REDUCE 'ref_extent' a bit"
-
-    ## MP changed from assert label_area > ref_area to just print an error instead
-    #####################################################################################################
-    #if label_area > ref_area:
-    #    print( '(ldTe) WARNING' )
-    #    print( "(ldTe) failed to find the leaf region in pre-processing!\n Try to REDUCE 'ref_extent' a bit" )
-    #####################################################################################################
-    #low_s_bin = labeled_img == label_id
-
-    #########################################################################################################################
-    # divide low_s
-    #h = low_s.height
-    #w = low_s.width
-    ## h OR w = 500 + 450k + R
-    #h_k = (h - patch_size) // (patch_size - overlap_size)
-    #h_R = (h - patch_size) % (patch_size - overlap_size)
-    #if h_R <= overlap_size:
-    #    h_flag = 0
-    #else:
-    #    h_flag = 1
-    #w_k = (w - patch_size) // (patch_size - overlap_size)
-    #w_R = (w - patch_size) % (patch_size - overlap_size)
-    #if w_R <= overlap_size:
-    #    w_flag = 0
-    #else:
-    #    w_flag = 1
-
-    #h_list = []
-    #h_list.append(patch_size / 2)
-
-    #for i in range(1, h_k + 1):
-    #    h_list.append(patch_size / 2 + (patch_size - overlap_size) * i)
-
-    #if not h_flag:
-    #    if h_k >= 1:
-    #        h_list.remove(patch_size / 2 + (patch_size - overlap_size) * h_k)
-    #    h_list.append(h - patch_size / 2)
-    #else:
-    #    h_list.append(h - patch_size / 2)
-
-    #w_list = []
-    #w_list.append(patch_size / 2)
-
-    #for j in range(1, w_k + 1):
-    #    w_list.append(patch_size / 2 + (patch_size - overlap_size) * j)
-
-    #if not w_flag:
-    #    if w_k >= 1:
-    #        w_list.remove(patch_size / 2 + (patch_size - overlap_size) * w_k)
-    #    w_list.append(w - patch_size / 2)
-    #else:
-    #    w_list.append(w - patch_size / 2)
-
-    #[r_list, c_list] = np.meshgrid(h_list, w_list)
-    #r_list = r_list.flatten()
-    #c_list = c_list.flatten()
-    ## makes a grid of all of the patches x,y
-    ##########################################################################################################################
-
-    #tar_r_list = []
-    #tar_c_list = []
-
-    #for i in range(len(r_list)):
-    #    r = r_list[i]
-    #    c = c_list[i]
-    #    topy = int(r - patch_size / 2)
-    #    buttomy = int(r + patch_size / 2)
-    #    leftx = int(c - patch_size / 2)
-    #    rightx = int(c + patch_size / 2)
-    #    low_patch = low_s_bin[topy:buttomy, leftx:rightx]
-    #    if np.sum(low_patch):
-    #        tar_r_list.append(r)
-    #        tar_c_list.append(c)
-
-    ## patch start and end coords
-    ##########################################################################################################################
-
-    #r_list = tar_r_list
-    #c_list = tar_c_list
-
-    ## print(time() - start, 's')
-    #num_threads = 64
-    #num_patches = len(r_list)
-    #print('\tSplit into {} patches.'.format(num_patches) )
-    #log.writelines('num_patches : ' + str(num_patches) + '\n')
-
-    #spacing = np.linspace(0, num_patches, num_threads + 1).astype(np.int)
-    #ranges = []
-    #for i in range(len(spacing) - 1):
-    #    ranges.append([spacing[i], spacing[i + 1]])
-
-    #img = cv2.cvtColor( img,cv2.COLOR_BGR2RGB )
-    #threads = []
-    #for thread_index in range(len(ranges)):
-    #    args = (img, filename, imgpath, thread_index, ranges, r_list, c_list, log, patch_size)
-    #    t = threading.Thread(target=divide_slide, args=args)
-    #    t.setDaemon(True)
-    #    threads.append(t)
-
-    #for t in threads:
-    #    t.start()
-
-    ## Wait for all the threads to terminate.
-    #for t in threads:
-    #    t.join()
 
     stop = time()
     print('\tPreprocessing time : ' + str(stop - start))

@@ -136,24 +136,6 @@ def rmbackground2( slide,leaf_mask_dir,npz_dir_whole,npz_dir_whole_post ):
 
     save_npz(os.path.join(npz_dir_whole_post, slideNameMap_npz), csr_matrix(SegRes))
 
-
-# Takes npz file and saves it as png file in the postprocess_slide_dir directory 
-def SavePatchMap(npz_dir_whole_post, postprocess_slide_dir, MatName):
-    MatFile = os.path.join(npz_dir_whole_post, MatName)
-
-    SegRes = load_npz(MatFile)
-    SegRes = SegRes.todense()
-    SegRes = vl2im(SegRes)
-
-    FigName = MatName.replace('_Map.npz', '_OSeg.png')
-    FigFile = os.path.join(postprocess_slide_dir, FigName)
-    Fig = Image.fromarray(SegRes.astype(dtype=np.uint8))
-
-    del SegRes
-
-    Fig.convert('RGB')
-    Fig.save(FigFile, 'PNG')
-
 class GUI(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
         tk.Frame.__init__(self, parent, *args, **kwargs)
@@ -742,10 +724,8 @@ class GUI(tk.Frame):
         self.save()
 
         saveDir = self.saveDir
-        #print( 'saveDir :',saveDir )
         if saveDir != 'None':
             root_dir = os.path.join( saveDir,self.saveNameEntry.get() )
-        #print( 'root_dir :',root_dir )
 
         self.model_name = self.modelTypeVar.get()
 
@@ -842,6 +822,33 @@ class GUI(tk.Frame):
         
         self.formatDF()
 
+        #TODO maybe do all of the model-specific stuff here
+        modelname = self.modelTypeVar.get()
+        # setting
+        patch_size = 512
+        if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_dilated_Jun21.pth':
+            patch_size = 572
+            #print('HERE0')
+        if model_id == 'LEAF_UNET_FULL256_Jun21.pth' or model_id == 'LEAF_UNET_FULL256_July21.pth':
+            patch_size = 256
+            #print('HERE1')
+        if model_id == 'LEAF_UNET_FULL512_Jun21.pth':
+            patch_size = 512
+            #print('HERE2')
+        #TODO
+        #patch_size = 256 
+        INPUT_SIZE = (patch_size, patch_size)
+        #print('INPUT_SIZE :',INPUT_SIZE)
+        overlap_size = 64
+        #TODO look into this
+        ref_area = 10000  # pre-processing
+        ref_extent = 0.6  # pre-processing
+        rm_rf_area = 5000  # post-processing
+        #ref_ecc = 0.92  # post-processing
+        #ref_ecc = 0.85  # post-processing
+        ref_ecc = 0.92  # post-processing
+        BATCH_SIZE = 32
+
         good_file_started = False
         bad_file_started = False
         file_started = False
@@ -857,36 +864,11 @@ class GUI(tk.Frame):
             print( '\tUsing device:',device )
             if device.type == 'cuda':
                 print( '\t',pytorch.cuda.get_device_name(0) )
-            #TODO maybe do all of the model-specific stuff here
-            modelname = self.modelTypeVar.get()
-            # setting
-            patch_size = 512
-            if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_dilated_Jun21.pth':
-                patch_size = 572
-                #print('HERE0')
-            if model_id == 'LEAF_UNET_FULL256_Jun21.pth' or model_id == 'LEAF_UNET_FULL256_July21.pth':
-                patch_size = 256
-                #print('HERE1')
-            if model_id == 'LEAF_UNET_FULL512_Jun21.pth':
-                patch_size = 512
-                #print('HERE2')
-            #TODO
-            #patch_size = 256 
-            INPUT_SIZE = (patch_size, patch_size)
-            #print('INPUT_SIZE :',INPUT_SIZE)
-            overlap_size = 64
-            #TODO look into this
-            ref_area = 10000  # pre-processing
-            ref_extent = 0.6  # pre-processing
-            rm_rf_area = 5000  # post-processing
-            #ref_ecc = 0.92  # post-processing
-            #ref_ecc = 0.85  # post-processing
-            ref_ecc = 0.92  # post-processing
-            BATCH_SIZE = 32
+
 
             #test_img_pth = imagelst[0] # name of the image, but starts with a '/'
             test_img_pth = df_row[ 'filename' ]
-            #print( 'test_img_pth :',test_img_pth )
+            print( 'test_img_pth :',test_img_pth )
             filename = test_img_pth.split('/')[-1] # name of the image
             #print( 'filename :',filename )
             slidename = filename[:-4] # slidename is just the name of the image w/o extension
@@ -920,6 +902,10 @@ class GUI(tk.Frame):
             #DATA_DIRECTORY = patch_image_dir
             data_list_pth = txt_dir
             NUM_CLASSES = 2
+
+            postprocess_slide_dir = os.path.join( postprocess_dir,slidename )
+            if not os.path.exists( postprocess_slide_dir ):
+                os.makedirs( postprocess_slide_dir )
 
 #############################################################################################################################
 #############################################################################################################################
@@ -956,6 +942,7 @@ class GUI(tk.Frame):
             #log.writelines('Processing ' + slidename + '\n')
             TestTxt = os.path.join(data_list_pth, slidename + '.txt')
             #testloader = data.DataLoader(LEAFTest(TestTxt, resize_size=INPUT_SIZE, mean=IMG_MEAN),
+
             testloader = data.DataLoader(LEAFTest(TestTxt, crop_size=INPUT_SIZE, mean=IMG_MEAN),
                                          batch_size=BATCH_SIZE, shuffle=False, num_workers=16)
             #TODO maybe change these names?
@@ -976,32 +963,13 @@ class GUI(tk.Frame):
                     del output
 
                     for ind in range(0, pred[0].size(0)):
-                        prob = torch.squeeze(pred[0][ind]).data.cpu().numpy()
-                        #print( 'prob.shape :',prob.shape )
-                        prob = coo_matrix(prob)
-                        if len(prob.data) == 0:
-                            continue
-                        mapname = name[ind].replace('.jpg', '_N' + str(num_examples) + '_MAP.npz')
-                        mapfile = os.path.join(TestMapPath, mapname)
-                        save_npz(mapfile, prob.tocsr())
-
                         msk = torch.squeeze(pred[1][ind]).data.cpu().numpy()
-                        # MP save each individual patch map
-                        ##################################################################
-                        msk_copy = msk.copy()
-                        msk = coo_matrix(msk)
 
-                        if len(msk.data) == 0:
-                            continue
-
-                        patch_msk_name = name[ind].replace( '.jpg','_mask.jpg' )
-                        patch_msk_pth = os.path.join( patch_mask_slide_dir,patch_msk_name )
-                        plt.imsave( patch_msk_pth,msk_copy )
-                        ##################################################################
-                        npzname = name[ind].replace('.jpg', '_N' + str(num_examples) + '_MSK.npz')
-                        npzfile = os.path.join(TestNpzPath, npzname)
-                        #print('npzfile :',npzfile)
-                        save_npz(npzfile, msk.tocsr())
+                        pred_im_rgb = vl2im(msk)
+                        Fig = Image.fromarray(pred_im_rgb.astype(dtype=np.uint8))
+                        Fig.convert('RGB')
+                        FigFile = os.path.join(postprocess_slide_dir,slidename+'_OSeg.png')
+                        Fig.save(FigFile, 'PNG')
 
                     batch_time.update(time.time() - end)
                     end = time.time()
@@ -1023,43 +991,19 @@ class GUI(tk.Frame):
             #slide_map_name_png = slidename + '_Map.png'
             slide_map_name_png = slidename + '_OSeg.png'
 
-            postprocess_slide_dir = os.path.join( postprocess_dir,slidename )
-            if not os.path.exists( postprocess_slide_dir ):
-                os.makedirs( postprocess_slide_dir )
 
             #TODO save original image here
-            # save original leaf image
-            ##################################################################################################
-            img = spm.imread(test_img_pth)
+            img_orig = spm.imread(test_img_pth)
             #print( 'test_img_pth :',test_img_pth )
             o_img_pth = os.path.join( postprocess_slide_dir,slidename+'_Original.png' )
-            plt.imsave( o_img_pth,img )
+            plt.imsave( o_img_pth,img_orig )
             ##################################################################################################
 
 
             # This is the image that the neural net produces
-            img = spm.imread(test_img_pth)
-            width, height = img.shape[1], img.shape[0]
-            # combines the individual npz files of each patch into one big npz file per image
-            # saved at slide_map_name_npz, (width and height should be the same as the input image)
-            merge_npz(os.path.join(npz_dir),
-                            slidename,
-                            os.path.join( npz_dir_whole_post,slide_map_name_npz ),
-                            int(width),
-                            int(height)
-                            )
-
-            # saves the output of the neural net once the patches are put together and the background is removed
-            # Takes npz file and saves it as png file in the PredFigPath directory 
-
-            SavePatchMap( npz_dir_whole_post, postprocess_slide_dir, slidename + "_Map.npz")
-
-            #TODO remove NPZ subdirs now?
-            # remove the npz subdirs for each individual image to save space here
-            #os.remove( os.path.join( whole_npz_dir,slide_map_name_npz ) )
-            shutil.rmtree( os.path.join( npz_dir,slidename ) )
-            shutil.rmtree( os.path.join( map_dir,slidename ) )
-
+            img_orig = spm.imread(test_img_pth)
+            print('test_img_pth (img_orig):',test_img_pth)
+            width, height = img_orig.shape[1], img_orig.shape[0]
 
             # pred_img_pth is where the png files is previously saved
             #TODO pred_img_pth to files_to_delete
