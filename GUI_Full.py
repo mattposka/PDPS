@@ -26,7 +26,7 @@ import model.u_net2 as u_net2
 
 import model.u_net572 as u_net572
 import model.u_net572_dilated as u_net572_dilated
-import model.u_netFull512 as u_netFull512
+#import model.u_netFull512 as u_netFull512
 
 import torch.nn as nn
 #from merge_npz_final import merge_npz
