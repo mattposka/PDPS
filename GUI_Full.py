@@ -26,6 +26,7 @@ import model.u_net2 as u_net2
 
 import model.u_net572 as u_net572
 import model.u_net572_dilated as u_net572_dilated
+import model.u_netFull512 as u_netFull512
 
 import torch.nn as nn
 #from merge_npz_final import merge_npz
@@ -92,7 +93,6 @@ warnings.filterwarnings('ignore',category=UserWarning)
 
 # TODO os.remove() and os.rmdir() or os.removedirs()
 
-Image.MAX_IMAGE_PIXELS = 933120000
 imagelst = []
 current = 0
 count = 0
@@ -114,27 +114,6 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
-
-# remove background
-def rmbackground2( slide,leaf_mask_dir,npz_dir_whole,npz_dir_whole_post ):
-
-    SlideName = slide.split('/')[-1]
-
-    mskpth = os.path.join( leaf_mask_dir,'leaf_mask_'+SlideName )
-    mskpth_p = mskpth.replace( '.png','.p' )
-    leaf_mask = p.load( open(mskpth_p,'rb') )
-    # remove the pickle file of the leaf mask to save space once the program is running correctly
-    os.remove( mskpth_p )
-
-    slideNameMap_npz = SlideName.replace(".png", "_Map.npz")
-    slideNameMap_npz_pth = os.path.join(npz_dir_whole, slideNameMap_npz)
-    print('slideNameMap_npz_pth :',slideNameMap_npz_pth)
-    SegRes = load_npz(slideNameMap_npz_pth)
-    SegRes = SegRes.todense()
-    print( 'SegRes.shape :',SegRes.shape )
-    SegRes = np.where( leaf_mask==False,0,SegRes )
-
-    save_npz(os.path.join(npz_dir_whole_post, slideNameMap_npz), csr_matrix(SegRes))
 
 class GUI(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
@@ -515,32 +494,32 @@ class GUI(tk.Frame):
         # draws a circle over every segmented region that is slightly larger than the region
         for c in centers:
            cv2.circle( circle_img,(int(c[0]),int(c[1])),int(expand_ratio*c[2]),(255),-1 )
-        cir_img_pth = pred_img_pth.replace( '.png','_circles.png' )
-        imsave( cir_img_pth,circle_img )
+        #cir_img_pth = pred_img_pth.replace( '.png','_circles.png' )
+        #imsave( cir_img_pth,circle_img )
 
         # labeled the new circle image
         labeled_circle = label(circle_img, connectivity=2)
-        lab_cir_pth = pred_img_pth.replace( '.png','_labeledCircles.png' )
-        imsave( lab_cir_pth,labeled_circle )
+        #lab_cir_pth = pred_img_pth.replace( '.png','_labeledCircles.png' )
+        #imsave( lab_cir_pth,labeled_circle )
 
         # applies the labels of the circle image to the original image,
         # theoretically grouping regions close to one-another together.
         labeled_circle[ labeled_img==0 ] = 0
         labeled_image = labeled_circle
-        lab_img_pth = pred_img_pth.replace( '.png','_labeledRegions.png' )
-        imsave( lab_img_pth,labeled_image )
+        #lab_img_pth = pred_img_pth.replace( '.png','_labeledRegions.png' )
+        #imsave( lab_img_pth,labeled_image )
 
         # remove small regions
         new_props = regionprops(labeled_image)
         labeled_img = self.regionAreaFilter( new_props,labeled_image )
-        lab_img_pth = pred_img_pth.replace( '.png','_RegionAreaFilter.png' )
-        imsave( lab_img_pth,labeled_image )
+        #lab_img_pth = pred_img_pth.replace( '.png','_RegionAreaFilter.png' )
+        #imsave( lab_img_pth,labeled_image )
 
         # remove non-circle region
         new_props = regionprops(labeled_image)
         labeled_img = self.circleFilter( new_props,labeled_image,ref_ecc=ref_ecc )
-        lab_img_pth = pred_img_pth.replace( '.png','_NonCircleFilter.png' )
-        imsave( lab_img_pth,labeled_image )
+        #lab_img_pth = pred_img_pth.replace( '.png','_NonCircleFilter.png' )
+        #imsave( lab_img_pth,labeled_image )
 
         return labeled_img
 
@@ -563,8 +542,6 @@ class GUI(tk.Frame):
 
         new_labeled_img8 = np.asarray( labeled_img,dtype=np.uint8 )
         contours,heir = cv2.findContours( new_labeled_img8,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE )
-        #print( 'len(contours) :',len(contours) )
-        #print( 'len( contours ) :',len(contours) )
 
         centers = []
         for c in contours:
@@ -586,9 +563,6 @@ class GUI(tk.Frame):
 
     # Sort by contour size and take n_lesion largest areas, then sort by x+y locations
     def sortAndFilterContours( self,contour_arr,imgsWLesions_dir,df_index ):
-        con_sav_pth1 = os.path.join( imgsWLesions_dir,self.imageDF.loc[df_index,'name'].replace('.png','conv1.p' ) )
-        p.dump( contour_arr,open(con_sav_pth1,'wb') )
-
         # This is where the largest [num_lesions] lesions are kept
         # also sorts by y and x values
         #contour_arr = contour_arr[ contour_arr[:,7].argsort() ][-self.num_lesions:,:]
@@ -596,9 +570,6 @@ class GUI(tk.Frame):
         contour_arr = contour_arr[contour_arr[:,7].argsort()][-self.num_lesions:,:]
         contour_arr = contour_arr[ contour_arr[:,5].argsort() ]
         contour_arr = contour_arr[ contour_arr[:,6].argsort(kind='mergesort') ]
-
-        con_sav_pth2 = os.path.join( imgsWLesions_dir,self.imageDF.loc[df_index,'name'].replace('.png','conv1.p' ) )
-        p.dump( contour_arr,open(con_sav_pth1,'wb') )
 
         return contour_arr
 
@@ -628,15 +599,10 @@ class GUI(tk.Frame):
             contours_reordered = np.zeros( shape=(self.num_lesions,8) )
             lesion_number_taken = []
             for i in range( self.num_lesions ):
-                #print('i :',i)
-                #xs = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xstart']
-                #xe = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xend']
-                #ys = prev_img_df.at[dfl-1,'l'+str(i+1)+'_ystart']
-                #ye = prev_img_df.at[dfl-1,'l'+str(i+1)+'_yend']
-                xs = prev_img_df.at[dfl - 1, 'l' + str(i + 1) + '_xstart']
-                xe = prev_img_df.at[dfl - 1, 'l' + str(i + 1) + '_xend']
-                ys = prev_img_df.at[dfl - 1, 'l' + str(i + 1) + '_ystart']
-                ye = prev_img_df.at[dfl - 1, 'l' + str(i + 1) + '_yend']
+                xs = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xstart']
+                xe = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xend']
+                ys = prev_img_df.at[dfl-1,'l'+str(i+1)+'_ystart']
+                ye = prev_img_df.at[dfl-1,'l'+str(i+1)+'_yend']
                 #print('xs,xe,ys,ye :',xs,xe,ys,ye)
 
                 found = False
@@ -729,33 +695,13 @@ class GUI(tk.Frame):
 
         self.model_name = self.modelTypeVar.get()
 
-        mask_dir = os.path.join( root_dir,'masks' )
-        if not os.path.exists( mask_dir ):
-            os.makedirs( mask_dir )
-
-        leaf_mask_dir = os.path.join( mask_dir,'leaf_masks' )
-        if not os.path.exists( leaf_mask_dir ):
-            os.makedirs( leaf_mask_dir )
-
-        lesion_mask_dir = os.path.join( mask_dir,'lesion_masks' )
-        if not os.path.exists( lesion_mask_dir ):
-            os.makedirs( lesion_mask_dir )
-
         result_dir = os.path.join( root_dir,'resultFiles' )
         if not os.path.exists( result_dir ):
             os.makedirs( result_dir )
 
-        postprocess_dir = os.path.join( result_dir,'postprocessing' )
+        postprocess_dir = os.path.join( root_dir,'postprocessing' )
         if not os.path.exists( postprocess_dir ):
             os.makedirs( postprocess_dir )
-
-        patch_dir = os.path.join( root_dir,'patches' )
-        if not os.path.exists( patch_dir ):
-            os.makedirs( patch_dir )
-
-        patch_image_dir = os.path.join( patch_dir,'images' )
-        if not os.path.exists( patch_image_dir ):
-            os.makedirs( patch_image_dir )
 
         log_dir = os.path.join( root_dir,'log' )
         if not os.path.exists( log_dir ):
@@ -767,46 +713,9 @@ class GUI(tk.Frame):
         if not os.path.exists(txt_dir):
             os.makedirs(txt_dir)
 
-        # I'm not exactly sure what is being saved in these patchnet directories
-        ###################################################################
-        patchnet_dir = os.path.join( root_dir,'PatchNet' )
-
-        npz_dir = os.path.join( patchnet_dir,'npz' )
-        if not os.path.exists(npz_dir):
-            os.makedirs(npz_dir)
-
-        map_dir = os.path.join( patchnet_dir,'map' )
-        if not os.path.exists(map_dir):
-            os.makedirs(map_dir)
-
-        #log_dir = os.path.join( patchnet_dir,'logfiles' )
-        #if not os.path.exists(log_dir):
-        #    os.makedirs(log_dir)
-
-        npz_dir_whole = os.path.join( npz_dir,'whole_npz' )
-        npz_dir_whole_post = os.path.join( npz_dir,'whole_npz_post' )
-
-        #PredFigPath = os.path.join( result_dir,'whole_fig_pred' )
-        #PredFigPath_BgRm = os.path.join( result_dir,'whole_fig_pred_bgrm' )
         imgsWLesions_dir = os.path.join( result_dir,'imgsWLesions' )
         if not os.path.exists(imgsWLesions_dir):
             os.makedirs(imgsWLesions_dir)
-        if not os.path.exists(npz_dir_whole_post):
-            os.makedirs(npz_dir_whole_post)
-        #if not os.path.exists(PredFigPath):
-        #    os.makedirs(PredFigPath)
-        #if not os.path.exists(PredFigPath_BgRm):
-        #    os.makedirs(PredFigPath_BgRm)
-        ###################################################################
-
-        # More path stuff
-        ###############################################################################################
-        # merge npz
-        # maybe change this part?
-        whole_npz_dir = os.path.join( npz_dir,'whole_npz' )
-        if not os.path.exists( whole_npz_dir ):
-            os.makedirs( whole_npz_dir )
-        ###############################################################################################
 
         ###################################################################
         # make directory to hold pytorch models
@@ -824,30 +733,18 @@ class GUI(tk.Frame):
 
         #TODO maybe do all of the model-specific stuff here
         modelname = self.modelTypeVar.get()
-        # setting
         patch_size = 512
         if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_dilated_Jun21.pth':
             patch_size = 572
-            #print('HERE0')
         if model_id == 'LEAF_UNET_FULL256_Jun21.pth' or model_id == 'LEAF_UNET_FULL256_July21.pth':
             patch_size = 256
-            #print('HERE1')
-        if model_id == 'LEAF_UNET_FULL512_Jun21.pth':
+        if model_id == 'LEAF_UNET_FULL512_Jun21.pth' or model_id == 'LEAF_UNET_FULL512_July21.pth':
             patch_size = 512
-            #print('HERE2')
-        #TODO
-        #patch_size = 256 
+
         INPUT_SIZE = (patch_size, patch_size)
-        #print('INPUT_SIZE :',INPUT_SIZE)
-        overlap_size = 64
-        #TODO look into this
-        ref_area = 10000  # pre-processing
-        ref_extent = 0.6  # pre-processing
-        rm_rf_area = 5000  # post-processing
-        #ref_ecc = 0.92  # post-processing
-        #ref_ecc = 0.85  # post-processing
         ref_ecc = 0.92  # post-processing
-        BATCH_SIZE = 32
+        #IMG_MEAN = np.array((62.17962105572224, 100.62603236734867, 131.60830906033516), dtype=np.float32)
+        IMG_MEAN = np.array((128.95671, 109.307915, 96.25992), dtype=np.float32) # R G B
 
         good_file_started = False
         bad_file_started = False
@@ -866,40 +763,24 @@ class GUI(tk.Frame):
                 print( '\t',pytorch.cuda.get_device_name(0) )
 
 
-            #test_img_pth = imagelst[0] # name of the image, but starts with a '/'
+            #test_img_pth = imagelst[0] # full path and  name of the image, but starts with a '/'
             test_img_pth = df_row[ 'filename' ]
-            print( 'test_img_pth :',test_img_pth )
             filename = test_img_pth.split('/')[-1] # name of the image
             #print( 'filename :',filename )
             slidename = filename[:-4] # slidename is just the name of the image w/o extension
             #TODO can I replace slidename with imageName?
 
-            patch_mask_slide_dir = os.path.join( lesion_mask_dir,slidename )
-            if not os.path.exists( patch_mask_slide_dir ):
-                os.makedirs( patch_mask_slide_dir )
-
             log = open(log_pth, 'w')
             log.write(test_img_pth + '\n')
 
-            # divide testing image into patches
-            process_tif(test_img_pth, filename, patch_image_dir, log, patch_size,
-                        overlap_size, ref_area=ref_area, ref_extent=ref_extent, leaf_mask_dir=leaf_mask_dir ) #TODO error here with finding ref_extent
-
-            txtname = slidename + ".txt"
-            txtfile = os.path.join(txt_dir, txtname)
-            txt = open(txtfile, 'w')
-            SlideDir = os.path.join(patch_image_dir, slidename)
-            PatchList = os.listdir(SlideDir)
-            for PatchName in PatchList:
-                PatchFile = os.path.join(SlideDir, PatchName)
-                txt.write(PatchFile + '\n')
-            txt.close()
+            resized_image, normalized_image, leaf_mask = process_tif(test_img_pth,log,patch_size,mean=IMG_MEAN )
+            #print('np.max(normalized_image) :',np.max(normalized_image) )
+            #print('np.min(normalized_image) :',np.min(normalized_image) )
 
             #################################################
             # testing
-            IMG_MEAN = np.array((62.17962105572224, 100.62603236734867, 131.60830906033516), dtype=np.float32)
             #TODO do I need this? below()
-            #DATA_DIRECTORY = patch_image_dir
+            #DATA_DIRECTORY = resized_image_dir
             data_list_pth = txt_dir
             NUM_CLASSES = 2
 
@@ -910,23 +791,17 @@ class GUI(tk.Frame):
 #############################################################################################################################
 #############################################################################################################################
             preprocess_start_time = time.time()
-            # TODO What LogName to use?
-            #LogName = "Test_HeatMap_log.txt"
-            #LogFile = os.path.join(log_dir, LogName)
-            #print( 'LogFile :',LogFile )
-            #log = open(LogFile, 'w')
-            #log.writelines('batch size:' + str(BATCH_SIZE) + '\n')
-            #log.writelines(data_list_pth + '\n')
-            #log.writelines('restore from ' + RESTORE_FROM + '\n')
 
             #TODO make this cleaner later, but for now just load different model if it has the specific name
 
-            if model_id == 'LEAF_UNET_Jun21.pth' or 'LEAF_UNET_FULL_Jun21.pth' or 'LEAF_UNET_FULL512_Jun21.pth' or 'LEAF_UNET_FULL256_Jun21.pth' or 'LEAF_UNET_FULL256_July21.pth':
+            if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_FULL_Jun21.pth' or model_id=='LEAF_UNET_FULL512_Jun21.pth' or model_id=='LEAF_UNET_FULL256_Jun21.pth' or model_id=='LEAF_UNET_FULL256_July21.pth':
                 model = u_net572.UNet(NUM_CLASSES)
             elif model_id == 'LEAF_UNET_dilated_Jun21.pth':
                 model = u_net572_dilated.UNet(NUM_CLASSES)
             elif model_id == 'LEAF_UNET_512_DeepSup_Jun21.pth':
                 model = u_net2.UNet2(NUM_CLASSES)
+            elif model_id == 'LEAF_UNET_FULL512_July21.pth':
+                model = u_netFull512.UNet(NUM_CLASSES)
             else:
                 model = u_net.UNet(NUM_CLASSES)
             model = nn.DataParallel(model)
@@ -937,47 +812,34 @@ class GUI(tk.Frame):
             #log.writelines("using running mean and running var\n")
             model.load_state_dict(saved_state_dict['state_dict'])
             model.eval()
-            #log.writelines('preprocessing time: ' + str(time.time() - preprocess_start_time) + '\n')
-            #print('\nProcessing ' + slidename)
-            #log.writelines('Processing ' + slidename + '\n')
-            TestTxt = os.path.join(data_list_pth, slidename + '.txt')
-            #testloader = data.DataLoader(LEAFTest(TestTxt, resize_size=INPUT_SIZE, mean=IMG_MEAN),
 
-            testloader = data.DataLoader(LEAFTest(TestTxt, crop_size=INPUT_SIZE, mean=IMG_MEAN),
-                                         batch_size=BATCH_SIZE, shuffle=False, num_workers=16)
-            #TODO maybe change these names?
-            TestNpzPath = os.path.join(npz_dir, slidename)
-            TestMapPath = os.path.join(map_dir, slidename)
-            if not os.path.exists(TestNpzPath):
-                os.mkdir(TestNpzPath)
-            if not os.path.exists(TestMapPath):
-                os.mkdir(TestMapPath)
             batch_time = AverageMeter()
             with torch.no_grad():
                 end = time.time()
-                for index, (image, name) in enumerate(testloader):
-                    output = model(image).to(device)
-                    del image
-                    Softmax = torch.nn.Softmax2d()
-                    pred = torch.max(Softmax(output), dim=1, keepdim=True)
-                    del output
 
-                    for ind in range(0, pred[0].size(0)):
-                        msk = torch.squeeze(pred[1][ind]).data.cpu().numpy()
+                if model_id == 'LEAF_UNET_FULL512_July21.pth':
+                    formatted_img = np.transpose(normalized_image,(2,0,1)) # transpose because channels first
+                else:
+                    formatted_img = np.transpose(resized_image,(2,0,1)) # transpose because channels first
+                formatted_img = formatted_img.astype(np.float32)
+                image_tensor = torch.from_numpy(np.expand_dims(formatted_img,axis=0))
+                output = model(image_tensor).to(device)
+                Softmax = torch.nn.Softmax2d()
+                pred = torch.max(Softmax(output), dim=1, keepdim=True)
+                #print( 'max(pred) :',np.max(pred) )
 
-                        pred_im_rgb = vl2im(msk)
-                        Fig = Image.fromarray(pred_im_rgb.astype(dtype=np.uint8))
-                        Fig.convert('RGB')
-                        FigFile = os.path.join(postprocess_slide_dir,slidename+'_OSeg.png')
-                        Fig.save(FigFile, 'PNG')
+                #msk = torch.squeeze(pred[1][ind]).data.cpu().numpy()
+                msk = torch.squeeze(pred[1]).data.cpu().numpy()
+                #print( 'max(msk) :',np.max(msk) )
 
-                    batch_time.update(time.time() - end)
-                    end = time.time()
+                pred_im_rgb = vl2im(msk)
+                Fig = Image.fromarray(pred_im_rgb.astype(dtype=np.uint8))
+                Fig.convert('RGB')
+                FigFile = os.path.join(postprocess_slide_dir,slidename+'_OSeg.png')
+                Fig.save(FigFile, 'PNG')
 
-                    if index % 10 == 0:
-                        print('Test:[{0}/{1}]\t'
-                              'Time {batch_time.val:.3f}({batch_time.avg:.3f})'
-                              .format(index, len(testloader), batch_time=batch_time))
+                batch_time.update(time.time() - end)
+                end = time.time()
 
 #####################################################################################################################
 #####################################################################################################################
@@ -993,24 +855,25 @@ class GUI(tk.Frame):
 
 
             #TODO save original image here
-            img_orig = spm.imread(test_img_pth)
+            #img_orig = spm.imread(test_img_pth)
             #print( 'test_img_pth :',test_img_pth )
-            o_img_pth = os.path.join( postprocess_slide_dir,slidename+'_Original.png' )
-            plt.imsave( o_img_pth,img_orig )
+            ro_img_pth = os.path.join( postprocess_slide_dir,slidename+'_Original.png' )
+            plt.imsave( ro_img_pth,resized_image )
             ##################################################################################################
 
 
             # This is the image that the neural net produces
-            img_orig = spm.imread(test_img_pth)
-            print('test_img_pth (img_orig):',test_img_pth)
-            width, height = img_orig.shape[1], img_orig.shape[0]
+            #img_orig = spm.imread(test_img_pth)
+            #print('test_img_pth (img_orig):',test_img_pth)
+            #width, height = img_orig.shape[1], img_orig.shape[0]
 
             # pred_img_pth is where the png files is previously saved
             #TODO pred_img_pth to files_to_delete
             #pred_img_pth = os.path.join( PredFigPath,slide_map_name_png )
             pred_img_pth = os.path.join( postprocess_slide_dir,slide_map_name_png )
-            img = spm.imread(pred_img_pth)
-            img = im2vl(img) # This returns binary mask of lesion areas = 1 and background = 0
+            #img = spm.imread(pred_img_pth)
+            #img = im2vl(img) # This returns binary mask of lesion areas = 1 and background = 0
+            img = im2vl(pred_im_rgb) # This returns binary mask of lesion areas = 1 and background = 0
 
             # preliminary fill holes? don't know if this is needed
             img_close = closing(img, square(3))
@@ -1042,23 +905,25 @@ class GUI(tk.Frame):
             # circleFiltered,sizeFiltered,and circleFilled
             imsave(postProcessed_img_pth, new_img)
 
-            # Overlap cleaned lesions over original leaf image for saving
-            #leaf_img = cv2.imread( test_img_pth )
-#            leaf_img = cv2.imread( test_img_pth )
-            leaf_img = cv2.imread( os.path.join(SlideDir,slidename + '_Full.jpg') )
-            #print( 'leaf_img.shape :',leaf_img.shape )
-            imag = cv2.imread(postProcessed_img_pth, cv2.IMREAD_UNCHANGED)
-            #print( 'imag.shape :',imag.shape )
-            gray = cv2.cvtColor( imag,cv2.COLOR_BGR2GRAY )
 
-            ret,gray_mask = cv2.threshold( gray,200,255,cv2.THRESH_BINARY_INV )
-            gray_mask_inv = cv2.bitwise_not( gray_mask )
-            leaf_bgr = cv2.bitwise_and( leaf_img,leaf_img,mask=gray_mask_inv )
-            lesion_fg = cv2.bitwise_and( imag,imag,mask=gray_mask )
+            #resized_image, leaf_mask = process_tif(test_img_pth, log, patch_size )
+
+
+###################################################################################################
+            # Overlap cleaned lesions over original leaf image for saving
+            leaf_img = resized_image
+            imag = cv2.imread(postProcessed_img_pth, cv2.IMREAD_UNCHANGED)
+            lesion = cv2.cvtColor( imag,cv2.COLOR_BGR2GRAY )
+
+            # Here the leaf_bgr is the entire image except for 'lesion', which is the lesion segmentation
+            ret,lesion_mask = cv2.threshold( lesion,200,255,cv2.THRESH_BINARY_INV )
+            lesion_mask_inv = cv2.bitwise_not( lesion_mask )
+            leaf_bgr = cv2.bitwise_and( leaf_img,leaf_img,mask=lesion_mask_inv )
+            lesion_fg = cv2.bitwise_and( imag,imag,mask=lesion_mask )
             im_to_write = cv2.add( leaf_bgr,lesion_fg )
 
             # what is this blurring for? maybe we don't need it?
-            blurred = cv2.GaussianBlur( gray,(5,5),0 )
+            blurred = cv2.GaussianBlur( lesion,(5,5),0 )
             #TODO fix this so that it isn't a loop
             r,c = blurred.shape
             for row in range( r ):
@@ -1067,29 +932,10 @@ class GUI(tk.Frame):
                         blurred[row,col] = 76
             blurred_bit = cv2.bitwise_not( blurred )
             _,labels,stats,centroid = cv2.connectedComponentsWithStats( blurred_bit )
+###################################################################################################
 
             rect_list = []
             cir_list = []
-            # List all the contours here
-            # Here contour_arr will be:
-            # [ w*h,x,y,x+w,y+h,cx,cy,area ]
-            #contour_arr = np.zeros( shape=(len(stats),8) )
-            #for i in range( len(stats) ):
-            #    # ignore the first entry because it is the background
-            #    if i > 0:
-            #        # get the bounding rect
-            #        x = stats[i,0]
-            #        y = stats[i,1]
-            #        w = stats[i,2]
-            #        h = stats[i,3]
-   #
-            #        contour_arr[i,:5] = [ w*h,x,y,x+w,y+h ]
-            #        rect_list.append([w * h, (x, y), (x + w, y + h)])
-   #
-            #        cx = centroid[i,0]
-            #        cy = centroid[i,1]
-            #        contour_arr[i,5:-1] = [ int(cx),int(cy) ]
-            #        contour_arr[i,7] = stats[i,4]
 
             contour_arr = np.zeros(shape=(len(stats), 8))
             for i in range(len(stats)):
@@ -1148,18 +994,17 @@ class GUI(tk.Frame):
                 file_started = True
             else:
                 csv_df.to_csv( result_file,header=False,mode='a',index=False )
-
-            if df_index in self.good_df_indices:
+            #if df_index in self.good_df_indices:
                 #remove unneeded files for good runs here
 # Files to delete only if segmentation is Good:
 # patches/images/IMG_NAME/
-                shutil.rmtree( os.path.join(patch_image_dir,slidename) )
+                #shutil.rmtree( os.path.join(resized_image_dir,slidename) )
 # masks/leaf_masks/IMG_NAME
-                os.remove( os.path.join(leaf_mask_dir,('leaf_mask_'+slidename+'.png')) )
+                #os.remove( os.path.join(leaf_mask_dir,('leaf_mask_'+slidename+'.png')) )
 # masks/lesion_masks/IMG_NAME/
-                shutil.rmtree( os.path.join(lesion_mask_dir,slidename) )
+           #     shutil.rmtree( os.path.join(lesion_mask_dir,slidename) )
 # resultFiles/postprocessing/IMG_NAME/
-                shutil.rmtree( postprocess_slide_dir )
+                #shutil.rmtree( postprocess_slide_dir )
 
            #     if good_file_started == False:
            #         csv_df.to_csv( result_file,index=False )
@@ -1175,11 +1020,10 @@ class GUI(tk.Frame):
 
 
         # remove the remaining directories that are only removed at the end of a full run
-        shutil.rmtree( patchnet_dir )
         shutil.rmtree( txt_dir )
         shutil.rmtree( log_dir )
 
-        p.dump( self.imageDF,open(pickle_file,'wb') )
+        #p.dump( self.imageDF,open(pickle_file,'wb') )
         print( '\tresult_file located :',result_file )
         print( '\n****************************************************************************' )
         print( '***********************************DONE*************************************' )
