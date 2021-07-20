@@ -27,6 +27,7 @@ import model.u_net2 as u_net2
 import model.u_net572 as u_net572
 import model.u_net572_dilated as u_net572_dilated
 import model.u_netFull512 as u_netFull512
+import model.u_netFull512_Dilated as u_netFull512_Dilated
 
 import torch.nn as nn
 #from merge_npz_final import merge_npz
@@ -764,7 +765,8 @@ class GUI(tk.Frame):
             patch_size = 572
         if model_id == 'LEAF_UNET_FULL256_Jun21.pth' or model_id == 'LEAF_UNET_FULL256_July21.pth':
             patch_size = 256
-        if model_id == 'LEAF_UNET_FULL512_Jun21.pth' or model_id == 'LEAF_UNET_FULL512_July21.pth':
+        #if model_id == 'LEAF_UNET_FULL512_Jun21.pth' or model_id == 'LEAF_UNET_FULL512_July21.pth':
+        if '512' in model_id:
             patch_size = 512
 
         INPUT_SIZE = (patch_size, patch_size)
@@ -795,6 +797,8 @@ class GUI(tk.Frame):
             model = u_net2.UNet2(NUM_CLASSES)
         elif model_id == 'LEAF_UNET_FULL512_July21.pth':
             model = u_netFull512.UNet(NUM_CLASSES)
+        elif model_id == 'LEAF_UNET_FULL512_Dilated_July21.pth':
+            model = u_netFull512_Dilated.UNetFull512_Dilated(NUM_CLASSES)
         else:
             model = u_net.UNet(NUM_CLASSES)
         model = nn.DataParallel(model)
@@ -936,7 +940,7 @@ class GUI(tk.Frame):
             #TODO check the save path here:
             # this should be the image after it is grouped into regions,
             # circleFiltered,sizeFiltered,and circleFilled
-            #imsave(postProcessed_img_pth, new_img)
+            imsave(postProcessed_img_pth, new_img)
 
 
             #resized_image, leaf_mask = process_tif(test_img_pth, log, patch_size )
