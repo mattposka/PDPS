@@ -26,7 +26,7 @@ import model.u_net2 as u_net2
 
 import model.u_net572 as u_net572
 import model.u_net572_dilated as u_net572_dilated
-#import model.u_netFull512 as u_netFull512
+import model.u_netFull512 as u_netFull512
 
 import torch.nn as nn
 #from merge_npz_final import merge_npz
@@ -482,7 +482,8 @@ class GUI(tk.Frame):
         self.imageDF[ 'HoursElapsed' ] = hours_elapsed
 
     # This will try to combine regions that are very close to one another
-    def combineRegions( self,labeled_img,ref_ecc,pred_img_pth,expand_ratio=1.1,mal=450 ):
+    #TODO check expand_ratio - changed to zero to fix very long lesions
+    def combineRegions( self,labeled_img,ref_ecc,pred_img_pth,leaf_mask,expand_ratio=0,mal=450 ):
         circle_img = np.asarray( labeled_img,dtype=np.uint8 )
         contours,heir = cv2.findContours( circle_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE )
 
@@ -521,6 +522,11 @@ class GUI(tk.Frame):
         #lab_img_pth = pred_img_pth.replace( '.png','_NonCircleFilter.png' )
         #imsave( lab_img_pth,labeled_image )
 
+        new_props = regionprops(labeled_image)
+        labeled_img = self.leafMaskFilter( new_props,labeled_image,leaf_mask )
+        #lab_img_pth = pred_img_pth.replace( '.png','_LeafMaskFilter.png' )
+        #imsave( lab_img_pth,labeled_image )
+
         return labeled_img
 
     # remove small regions
@@ -535,7 +541,27 @@ class GUI(tk.Frame):
         for i, reg in enumerate(new_props):
             if reg.eccentricity > ref_ecc:
                 labeled_img[labeled_img == reg.label] = 0
+            #print('reg.equivalent_diameter :',reg.equivalent_diameter )
+            #print('reg.major_axis_length :',reg.major_axis_length )
+            if reg.equivalent_diameter < 0.6*reg.major_axis_length: 
+                labeled_img[labeled_img == reg.label] = 0
         return labeled_img
+
+    # remove lesion areas that are outside of the leaf mask
+    def leafMaskFilter( self,new_props,labeled_img,leaf_mask ):
+        for i, reg in enumerate(new_props):
+            bb = reg.bbox #min_row,min_col,max_row,max_col
+            # [min,max) -> have to -1 to the max
+            corners = [[bb[0],bb[1]],
+                            [bb[0],bb[3]-1],
+                            [bb[2]-1,bb[1]],
+                            [bb[2]-1,bb[3]-1],
+                            ]
+            for c in corners:
+                if not leaf_mask[c[0],c[1]]:
+                    labeled_img[labeled_img == reg.label] = 0
+        return labeled_img
+
 
     # draws cirles inside of every region to fill holes, doughnuts, and crescents
     def drawCircles( self,labeled_img,postProcessed_img_pth ):
@@ -552,8 +578,8 @@ class GUI(tk.Frame):
         new_labeled_img_3d = cv2.cvtColor( new_labeled_img8,cv2.COLOR_GRAY2BGR )
         for c in centers:
            cv2.circle( new_labeled_img_3d,(int(c[0]),int(c[1])),int(0.7*c[2]),(0,255,0),2 )
-        circleimgpath = postProcessed_img_pth.replace( '.png','_circleFill.png' )
-        imsave( circleimgpath,new_labeled_img_3d )
+        #circleimgpath = postProcessed_img_pth.replace( '.png','_circleFill.png' )
+        #imsave( circleimgpath,new_labeled_img_3d )
 
         new_img = cv2.cvtColor( new_labeled_img_3d,cv2.COLOR_BGR2GRAY )
         new_img[ new_img != 0 ] = 1
@@ -754,18 +780,40 @@ class GUI(tk.Frame):
 
         #print('self.imageDF[name] :',self.imageDF['name'])
 
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        print( '\tUsing device:',device )
+        if device.type == 'cuda':
+            print( '\t',pytorch.cuda.get_device_name(0) )
+
+        #TODO make this cleaner later, but for now just load different model if it has the specific name
+        NUM_CLASSES = 2
+        if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_FULL_Jun21.pth' or model_id=='LEAF_UNET_FULL512_Jun21.pth' or model_id=='LEAF_UNET_FULL256_Jun21.pth' or model_id=='LEAF_UNET_FULL256_July21.pth':
+            model = u_net572.UNet(NUM_CLASSES)
+        elif model_id == 'LEAF_UNET_dilated_Jun21.pth':
+            model = u_net572_dilated.UNet(NUM_CLASSES)
+        elif model_id == 'LEAF_UNET_512_DeepSup_Jun21.pth':
+            model = u_net2.UNet2(NUM_CLASSES)
+        elif model_id == 'LEAF_UNET_FULL512_July21.pth':
+            model = u_netFull512.UNet(NUM_CLASSES)
+        else:
+            model = u_net.UNet(NUM_CLASSES)
+        model = nn.DataParallel(model)
+        model.to(device)
+        saved_state_dict = torch.load(RESTORE_FROM, map_location=lambda storage, loc: storage)
+        #num_examples = saved_state_dict['example']
+#           print("\tusing running mean and running var")
+            #log.writelines("using running mean and running var\n")
+        model.load_state_dict(saved_state_dict['state_dict'])
+        model.eval()
+
+
         for df_index,df_row in self.imageDF.iterrows(): 
             print( '\nCompleted {}/{} images'.format( df_index,len(self.imageDF) ) )
-            # input
-            device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-            print( '\tUsing device:',device )
-            if device.type == 'cuda':
-                print( '\t',pytorch.cuda.get_device_name(0) )
-
 
             #test_img_pth = imagelst[0] # full path and  name of the image, but starts with a '/'
             test_img_pth = df_row[ 'filename' ]
             filename = test_img_pth.split('/')[-1] # name of the image
+            print( 'Processing image :',filename )
             #print( 'filename :',filename )
             slidename = filename[:-4] # slidename is just the name of the image w/o extension
             #TODO can I replace slidename with imageName?
@@ -782,36 +830,15 @@ class GUI(tk.Frame):
             #TODO do I need this? below()
             #DATA_DIRECTORY = resized_image_dir
             data_list_pth = txt_dir
-            NUM_CLASSES = 2
 
-            postprocess_slide_dir = os.path.join( postprocess_dir,slidename )
-            if not os.path.exists( postprocess_slide_dir ):
-                os.makedirs( postprocess_slide_dir )
+            #postprocess_slide_dir = os.path.join( postprocess_dir,slidename )
+            #if not os.path.exists( postprocess_slide_dir ):
+            #    os.makedirs( postprocess_slide_dir )
 
 #############################################################################################################################
 #############################################################################################################################
             preprocess_start_time = time.time()
 
-            #TODO make this cleaner later, but for now just load different model if it has the specific name
-
-            if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_FULL_Jun21.pth' or model_id=='LEAF_UNET_FULL512_Jun21.pth' or model_id=='LEAF_UNET_FULL256_Jun21.pth' or model_id=='LEAF_UNET_FULL256_July21.pth':
-                model = u_net572.UNet(NUM_CLASSES)
-            elif model_id == 'LEAF_UNET_dilated_Jun21.pth':
-                model = u_net572_dilated.UNet(NUM_CLASSES)
-            elif model_id == 'LEAF_UNET_512_DeepSup_Jun21.pth':
-                model = u_net2.UNet2(NUM_CLASSES)
-            elif model_id == 'LEAF_UNET_FULL512_July21.pth':
-                model = u_netFull512.UNet(NUM_CLASSES)
-            else:
-                model = u_net.UNet(NUM_CLASSES)
-            model = nn.DataParallel(model)
-            model.to(device)
-            saved_state_dict = torch.load(RESTORE_FROM, map_location=lambda storage, loc: storage)
-            num_examples = saved_state_dict['example']
-#            print("\tusing running mean and running var")
-            #log.writelines("using running mean and running var\n")
-            model.load_state_dict(saved_state_dict['state_dict'])
-            model.eval()
 
             batch_time = AverageMeter()
             with torch.no_grad():
@@ -835,7 +862,8 @@ class GUI(tk.Frame):
                 pred_im_rgb = vl2im(msk)
                 Fig = Image.fromarray(pred_im_rgb.astype(dtype=np.uint8))
                 Fig.convert('RGB')
-                FigFile = os.path.join(postprocess_slide_dir,slidename+'_OSeg.png')
+                #FigFile = os.path.join(postprocess_slide_dir,slidename+'_OSeg.png')
+                FigFile = os.path.join(postprocess_dir,slidename+'_OSeg.png')
                 Fig.save(FigFile, 'PNG')
 
                 batch_time.update(time.time() - end)
@@ -844,10 +872,10 @@ class GUI(tk.Frame):
 #####################################################################################################################
 #####################################################################################################################
 
-            print('\tThe total test time for ' + slidename + ' is ' + str(batch_time.sum))
+            #print('\tThe total test time for ' + slidename + ' is ' + str(batch_time.sum))
             #log.writelines('batch num:' + str(len(testloader)) + '\n')
             #log.writelines('The total test time for ' + slidename + ' is ' + str(batch_time.sum) + '\n')
-            print( '\nPostProcessing now!' )
+            #print( '\nPostProcessing now!' )
             
             slide_map_name_npz = slidename + '_Map.npz'
             #slide_map_name_png = slidename + '_Map.png'
@@ -857,8 +885,10 @@ class GUI(tk.Frame):
             #TODO save original image here
             #img_orig = spm.imread(test_img_pth)
             #print( 'test_img_pth :',test_img_pth )
-            ro_img_pth = os.path.join( postprocess_slide_dir,slidename+'_Original.png' )
-            plt.imsave( ro_img_pth,resized_image )
+            #ro_img_pth = os.path.join( postprocess_slide_dir,slidename+'_Original.png' )
+            ro_img_pth = os.path.join( postprocess_dir,slidename+'_Original.png' )
+            #plt.imsave( ro_img_pth,resized_image )
+            cv2.imwrite( ro_img_pth,resized_image )
             ##################################################################################################
 
 
@@ -870,7 +900,8 @@ class GUI(tk.Frame):
             # pred_img_pth is where the png files is previously saved
             #TODO pred_img_pth to files_to_delete
             #pred_img_pth = os.path.join( PredFigPath,slide_map_name_png )
-            pred_img_pth = os.path.join( postprocess_slide_dir,slide_map_name_png )
+            #pred_img_pth = os.path.join( postprocess_slide_dir,slide_map_name_png )
+            pred_img_pth = os.path.join( postprocess_dir,slide_map_name_png )
             #img = spm.imread(pred_img_pth)
             #img = im2vl(img) # This returns binary mask of lesion areas = 1 and background = 0
             img = im2vl(pred_im_rgb) # This returns binary mask of lesion areas = 1 and background = 0
@@ -881,11 +912,13 @@ class GUI(tk.Frame):
             labeled_img = label(img_close, connectivity=2)
 
             # combine regions that are close to each other
-            labeled_img = self.combineRegions( labeled_img,ref_ecc,pred_img_pth )
+            labeled_img = self.combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask )
 
             # Draw circles around all areas with the same label to fill in any dounuts and crescents
-            postProcessed_img_pth = os.path.join( postprocess_slide_dir,slidename + "_postProcessed.png" )
+            #postProcessed_img_pth = os.path.join( postprocess_slide_dir,slidename + "_postProcessed.png" )
+            postProcessed_img_pth = os.path.join( postprocess_dir,slidename + "_postProcessed.png" )
             new_img =  self.drawCircles( labeled_img,postProcessed_img_pth )
+
 
             # is this needed?
             #TODO check this
@@ -903,7 +936,7 @@ class GUI(tk.Frame):
             #TODO check the save path here:
             # this should be the image after it is grouped into regions,
             # circleFiltered,sizeFiltered,and circleFilled
-            imsave(postProcessed_img_pth, new_img)
+            #imsave(postProcessed_img_pth, new_img)
 
 
             #resized_image, leaf_mask = process_tif(test_img_pth, log, patch_size )
@@ -984,10 +1017,11 @@ class GUI(tk.Frame):
 
             csv_df = clean_df[df_index:df_index+1]
 
-            postprocess_files = glob.glob(postprocess_slide_dir+'/*')
-            for f in postprocess_files:
-                if 'OSeg.png' not in f:
-                    os.remove(f)
+            #postprocess_files = glob.glob(postprocess_slide_dir+'/*')
+            #postprocess_files = glob.glob(postprocess_dir+'/*')
+            #for f in postprocess_files:
+            #    if 'OSeg.png' not in f:
+            #        os.remove(f)
 
             if file_started == False:
                 csv_df.to_csv( result_file,index=False )
@@ -1024,7 +1058,7 @@ class GUI(tk.Frame):
         shutil.rmtree( log_dir )
 
         #p.dump( self.imageDF,open(pickle_file,'wb') )
-        print( '\tresult_file located :',result_file )
+        print( '\n\tresult_file located :',result_file )
         print( '\n****************************************************************************' )
         print( '***********************************DONE*************************************' )
         print( '****************************************************************************' )

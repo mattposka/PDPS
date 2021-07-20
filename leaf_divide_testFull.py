@@ -21,7 +21,7 @@ import pickle as p
 # process_tif - 
 def process_tif( file,log,patch_size,mean=np.array((128,128,128)) ):
     filename = file.split('/')[-1]
-    print( '\nPreprocessing',filename )
+    #print( '\nPreprocessing',filename )
     start = time()
 
     img = cv2.imread(file)
@@ -83,7 +83,7 @@ def process_tif( file,log,patch_size,mean=np.array((128,128,128)) ):
     #p.dump( leaf_mask,open(maskpth_p,'wb') )
 
     stop = time()
-    print('\tPreprocessing time : ' + str(stop - start))
+    #print('\tPreprocessing time : ' + str(stop - start))
     log.writelines('processing time : ' + str(stop - start) + '\n')
 
     return resized_img,normalized_img,leaf_mask
