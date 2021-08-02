@@ -47,31 +47,31 @@ class _DecoderBlock(nn.Module):
 class UNetFull512_Dilated(nn.Module):
     def __init__(self, num_classes):
         super(UNetFull512_Dilated, self).__init__()
-        self.enc1 = _EncoderBlock(3, 96, ksize=5)
+        self.enc1 = _EncoderBlock(3, 96, ksize=3)
 
-        self.enc2 = _EncoderBlock(96, 78, ksize=5 )
-        self.enc2D = _EncoderBlock(96, 78, ksize=5, dilation=2, padding=1)
+        self.enc2 = _EncoderBlock(96, 100, ksize=3 )
+        self.enc2D = _EncoderBlock(96, 56, ksize=3, dilation=2, padding=1)
 
-        self.enc3 = _EncoderBlock(156, 128)
-        self.enc3D = _EncoderBlock(156, 128, dilation=3, padding=2)
+        self.enc3 = _EncoderBlock(156, 170)
+        self.enc3D = _EncoderBlock(156, 86, dilation=2, padding=1)
 
-        self.enc4 = _EncoderBlock(256, 256, dropout=True)
-        self.enc4D = _EncoderBlock(256, 256, dropout=True, dilation=4, padding=3)
+        self.enc4 = _EncoderBlock(256, 384, dropout=True)
+        self.enc4D = _EncoderBlock(256, 128, dropout=True, dilation=2, padding=1)
 
         #self.center = _DecoderBlock(512, 1024, 512, dilation=1)
-        self.center = _DecoderBlock(512, 512, 256, dilation=1)
+        self.center = _DecoderBlock(512, 640, 320, dilation=1)
         self.centerD2 = _DecoderBlock(512, 256, 128, dilation=2, padding=1)
         self.centerD4 = _DecoderBlock(512, 128, 64, dilation=4, padding=3)
-        self.centerD6 = _DecoderBlock(512, 128, 64, dilation=6, padding=5)
+        #self.centerD6 = _DecoderBlock(512, 128, 64, dilation=6, padding=5)
 
         #self.dec4 = _DecoderBlock(1024, 512, 256)
         #self.dec4D = _DecoderBlock(1024, 512, 256,dilation=4)
         self.dec4 = _DecoderBlock(1024, 256, 128)
-        self.dec4D = _DecoderBlock(1024, 256, 128,dilation=4,padding=3)
+        self.dec4D = _DecoderBlock(1024, 256, 128,dilation=2,padding=1)
 
         #self.dec3 = _DecoderBlock(512, 256, 128)
         self.dec3 = _DecoderBlock(512, 128, 64)
-        self.dec3D = _DecoderBlock(512, 128, 64, dilation=3,padding=2)
+        self.dec3D = _DecoderBlock(512, 128, 64, dilation=2,padding=1)
 
         #self.dec2 = _DecoderBlock(284, 128, 64)
         self.dec2 = _DecoderBlock(284, 64, 32)
