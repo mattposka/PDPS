@@ -111,14 +111,14 @@ class UNetFull512_Dilated(nn.Module):
         #print('centerD2.size() :',centerD2.size() ) 
         centerD4 = self.centerD4(torch.cat([enc4,F.interpolate(enc4D,enc4.size()[2:],mode='bilinear',align_corners=True)],1))
         #print('centerD4.size() :',centerD4.size() ) 
-        centerD6 = self.centerD6(torch.cat([enc4,F.interpolate(enc4D,enc4.size()[2:],mode='bilinear',align_corners=True)],1))
+        #centerD6 = self.centerD6(torch.cat([enc4,F.interpolate(enc4D,enc4.size()[2:],mode='bilinear',align_corners=True)],1))
         #print('centerD6.size() :',centerD6.size() ) 
 
         #dec4 = self.dec4(torch.cat([center, F.interpolate(enc4, center.size()[2:], mode='bilinear', align_corners=True)], 1))
         dec4 = self.dec4(torch.cat([center, \
             F.interpolate(centerD2, center.size()[2:], mode='bilinear', align_corners=True), \
             F.interpolate(centerD4, center.size()[2:], mode='bilinear', align_corners=True), \
-            F.interpolate(centerD6, center.size()[2:], mode='bilinear', align_corners=True), \
+            #F.interpolate(centerD6, center.size()[2:], mode='bilinear', align_corners=True), \
             F.interpolate(enc4, center.size()[2:], mode='bilinear', align_corners=True), \
             F.interpolate(enc4D, center.size()[2:], mode='bilinear', align_corners=True), \
             ],1))
@@ -127,7 +127,7 @@ class UNetFull512_Dilated(nn.Module):
         dec4D = self.dec4D(torch.cat([center, \
             F.interpolate(centerD2, center.size()[2:], mode='bilinear', align_corners=True), \
             F.interpolate(centerD4, center.size()[2:], mode='bilinear', align_corners=True), \
-            F.interpolate(centerD6, center.size()[2:], mode='bilinear', align_corners=True), \
+            #F.interpolate(centerD6, center.size()[2:], mode='bilinear', align_corners=True), \
             F.interpolate(enc4, center.size()[2:], mode='bilinear', align_corners=True), \
             F.interpolate(enc4D, center.size()[2:], mode='bilinear', align_corners=True), \
             ],1))
