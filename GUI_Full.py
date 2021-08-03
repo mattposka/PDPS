@@ -797,7 +797,7 @@ class GUI(tk.Frame):
             model = u_net2.UNet2(NUM_CLASSES)
         elif model_id == 'LEAF_UNET_FULL512_July21.pth':
             model = u_netFull512.UNet(NUM_CLASSES)
-        elif model_id == 'LEAF_UNET_FULL512_Dilated_July21.pth':
+        elif model_id == 'LEAF_UNET_FULL512_Dilated_Aug21.pth':
             model = u_netFull512_Dilated.UNetFull512_Dilated(NUM_CLASSES)
         else:
             model = u_net.UNet(NUM_CLASSES)
@@ -848,7 +848,7 @@ class GUI(tk.Frame):
             with torch.no_grad():
                 end = time.time()
 
-                if model_id == 'LEAF_UNET_FULL512_July21.pth':
+                if model_id == 'LEAF_UNET_FULL512_July21.pth' or model_id == 'LEAF_UNET_FULL512_Dilated_Aug21.pth':
                     formatted_img = np.transpose(normalized_image,(2,0,1)) # transpose because channels first
                 else:
                     formatted_img = np.transpose(resized_image,(2,0,1)) # transpose because channels first
