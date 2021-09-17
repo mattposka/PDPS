@@ -12,13 +12,16 @@ import torch.backends.cudnn as cudnn
 import os
 import os.path as osp
 #from utils.datasets import LEAFTrain
-from utils.datasetsNorm import LEAFTrain
+#from utils.datasetsNorm import LEAFTrain
+from utils.datasetsCircle import LEAFTrain
 #from utils.datasetsFull import LEAFTrain
 #from model.u_net import UNet
 #from model.u_net2 import UNet
 from model.u_net572 import UNet
 from model.u_netFull512 import UNetFull512
 from model.u_netFull512_Dilated import UNetFull512_Dilated
+from model.u_netCircle import UNetCircle
+from model.u_netFull512_Simple import UNetFull512_Simple
 import timeit
 import math
 from tensorboardX import SummaryWriter
@@ -35,9 +38,9 @@ BATCH_SIZE = 6
 #MAX_EPOCH = 100
 MAX_EPOCH = 1000
 GPU = "2"
-root_dir = '/data/leaf_train/green/July2021/'
-DATA_LIST_PATH = root_dir + 'Full512/train.txt'
-VAL_LIST_PATH = root_dir + 'Full512/validation.txt'
+root_dir = '/data/leaf_train/green/Sep2021/'
+DATA_LIST_PATH = root_dir + 'Circle/train.txt'
+VAL_LIST_PATH = root_dir + 'Circle/validation.txt'
 INPUT_SIZE = '512,512'
 LEARNING_RATE = 2.5 * 10 ** (-4)
 MOMENTUM = 0.9
@@ -55,10 +58,10 @@ RANDOM_SEED = 1234
 #TODO
 RESTORE_FROM = ''
 SAVE_PRED_EVERY = 50
-SNAPSHOT_DIR = root_dir + 'PatchNet/snapshotsFull512_Dilated_Aug'+postfix
+SNAPSHOT_DIR = root_dir + 'PatchNet/snapshotsCircle_Sep'+postfix
 IMGSHOT_DIR = root_dir + 'PatchNet/imgshots'+postfix
 WEIGHT_DECAY = 0.0005
-NUM_EXAMPLES_PER_EPOCH = 366
+NUM_EXAMPLES_PER_EPOCH = 732
 NUM_STEPS_PER_EPOCH = math.ceil(NUM_EXAMPLES_PER_EPOCH / float(BATCH_SIZE))
 MAX_ITER = max(NUM_EXAMPLES_PER_EPOCH * MAX_EPOCH + 1,
                NUM_STEPS_PER_EPOCH * BATCH_SIZE * MAX_EPOCH + 1)
@@ -182,7 +185,9 @@ def main():
 
     #model = UNet(args.num_classes)
     #model = UNetFull512(args.num_classes)
-    model = UNetFull512_Dilated(args.num_classes)
+    #model = UNetFull512_Dilated(args.num_classes)
+    #model = UNetFull512_Simple(args.num_classes)
+    model = UNetCircle(args.num_classes)
     model = torch.nn.DataParallel(model)
 
     optimizer = optim.SGD(model.parameters(),
@@ -338,7 +343,7 @@ def main():
                 msk_size = pred.size(2)
                 image = image.transpose(1, 2, 0)
                 image = cv2.resize(image, (msk_size, msk_size), interpolation=cv2.INTER_NEAREST)
-                image += IMG_MEAN
+                image[:,:,:3] = image[:,:,:3] + IMG_MEAN
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 label = labels.data.cpu().numpy()[0]
                 label = vl2im(label)
@@ -348,7 +353,7 @@ def main():
                 new_im.paste(Image.fromarray(image.astype('uint8'), 'RGB'), (0, 0))
                 new_im.paste(Image.fromarray(single_pred.astype('uint8'), 'RGB'), (msk_size, 0))
                 new_im.paste(Image.fromarray(label.astype('uint8'), 'RGB'), (msk_size * 2, 0))
-                new_im_name = 'B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '_' + patch_name[0]
+                new_im_name = 'B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '_' + patch_name[0].replace('.npy','.png')
                 new_im_file = os.path.join(args.img_dir, new_im_name)
                 new_im.save(new_im_file)
 
