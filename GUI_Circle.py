@@ -1,4 +1,3 @@
-#TODO use images from a good segmentation as extra training data for future models!!!
 import cv2
 from tkinter import *
 import tkinter as tk
@@ -10,8 +9,7 @@ from operator import itemgetter
 import pandas as pd
 from openpyxl import load_workbook
 import os
-from leaf_divide_testFull import process_tif
-#from leaf_divide_test import process_tif
+from leaf_divide_testCircle import process_tif
 import numpy as np
 import time
 import torch
@@ -29,6 +27,7 @@ import model.u_net572 as u_net572
 import model.u_net572_dilated as u_net572_dilated
 import model.u_netFull512 as u_netFull512
 import model.u_netFull512_Dilated as u_netFull512_Dilated
+import model.u_netCircle as u_netCircle
 
 import torch.nn as nn
 #from merge_npz_final import merge_npz
@@ -482,6 +481,7 @@ class GUI(tk.Frame):
             hours_diff = np.divide( secs_diff,3600 )
             hours_elapsed.append( int( hours_diff ) )
         self.imageDF[ 'HoursElapsed' ] = hours_elapsed
+        self.imageDF[ 'ResizeRatio' ] = 0
 
     # This will try to combine regions that are very close to one another
     #TODO check expand_ratio - changed to zero to fix very long lesions
@@ -524,8 +524,9 @@ class GUI(tk.Frame):
         #lab_img_pth = pred_img_pth.replace( '.png','_NonCircleFilter.png' )
         #imsave( lab_img_pth,labeled_image )
 
-        new_props = regionprops(labeled_image)
-        labeled_img = self.leafMaskFilter( new_props,labeled_image,leaf_mask )
+        #TODO test leaf_mask filter again later
+        #new_props = regionprops(labeled_image)
+        #labeled_img = self.leafMaskFilter( new_props,labeled_image,leaf_mask )
         #lab_img_pth = pred_img_pth.replace( '.png','_LeafMaskFilter.png' )
         #imsave( lab_img_pth,labeled_image )
 
@@ -609,6 +610,7 @@ class GUI(tk.Frame):
                         (self.imageDF['year']==self.imageDF.loc[df_index,'year']) &
                         (self.imageDF['month']==self.imageDF.loc[df_index,'month']) &
                         (self.imageDF['day']==self.imageDF.loc[df_index,'day']) &
+                        #(self.imageDF['index_num']<df_index) &
                         (self.imageDF['index_num'] < df_index)
                         #TODO maybe we still want to only compare against prev good imgs?
                         #(self.imageDF['index_num'].isin(self.good_df_indices))
@@ -686,22 +688,23 @@ class GUI(tk.Frame):
         else:
             self.good_df_indices.append( df_index )
 
-    # check if segmented lesions are good quality 
-    # leniancy is % of average that the lesions can fit within
-    def checkSegQual( self,contours_reordered,leniancy=0.5 ):
-        lesion_areas = contours_reordered[:,7]
+    # check if segmentation was good
+    def checkSegQuality( self,contours_reordered ):
+        areas = contours_reordered[:,7]
 
-        if len(lesion_areas) < self.num_lesions:
-            return last_seg_good == False
-        
-        maxArea = np.max(lesion_areas)
-        avgArea = np.mean(lesion_areas)
-        minArea = np.min(lesion_areas)
+        goodSeg = False
+        if len(areas) > 0:
+            mean_area = np.mean(areas)
+            max_area = np.max(areas)
+            min_area = np.min(areas)
 
-        if (1+leniancy)*avgArea<maxArea or leniancy*avgArea>minArea:
-            return last_seg_good == False
-        else:
-            return last_seg_good == True
+            goodSeg = True
+            if min_area < 0.5*mean_area:
+                goodSeg = False
+            if max_area > 0.5*mean_area:
+                goodSeg = False
+
+        return goodSeg
 
     # draw rectangles around the lesions
     def drawRecsAndSaveImg( self,contours_reordered,im_to_write,imgsWLesions_dir,df_index ):
@@ -714,6 +717,7 @@ class GUI(tk.Frame):
             cv2.rectangle( im_to_write,start,end,color,thickness )
         img_sav_pth = os.path.join( imgsWLesions_dir,self.imageDF.loc[df_index,'name'] )
         cv2.imwrite( img_sav_pth,im_to_write )
+
 
     #TODO making n='' for now
     def process(self,n=''):
@@ -794,6 +798,7 @@ class GUI(tk.Frame):
         good_file_started = False
         bad_file_started = False
         file_started = False
+        self.goodSeg = False
         self.bad_df_indices = []
         self.good_df_indices = []
 
@@ -816,6 +821,8 @@ class GUI(tk.Frame):
             model = u_netFull512.UNet(NUM_CLASSES)
         elif model_id == 'LEAF_UNET_FULL512_Dilated_Aug21.pth':
             model = u_netFull512_Dilated.UNetFull512_Dilated(NUM_CLASSES)
+        elif model_id == 'LEAF_UNET_CIRCLE_SEP21.pth':
+            model = u_netCircle.UNetCircle(NUM_CLASSES)
         else:
             model = u_net.UNet(NUM_CLASSES)
         model = nn.DataParallel(model)
@@ -828,8 +835,6 @@ class GUI(tk.Frame):
         model.eval()
 
 
-        prev_mask = np.zeros(patch_size,patch_size)
-        blank_img = np.zeros(patch_size,patch_size)
         for df_index,df_row in self.imageDF.iterrows(): 
             print( '\nCompleted {}/{} images'.format( df_index,len(self.imageDF) ) )
 
@@ -844,33 +849,38 @@ class GUI(tk.Frame):
             log = open(log_pth, 'w')
             log.write(test_img_pth + '\n')
 
-            resized_image, normalized_image, leaf_mask = process_tif(test_img_pth,log,patch_size,mean=IMG_MEAN )
+            # image_fg_size is the size of the side of the square containing the entire unresized leaf
+            # save this number for later use when to determine the actual size of all of the lesions later
+            resized_image, normalized_image, leaf_mask, resize_ratio = process_tif(test_img_pth,log,patch_size,mean=IMG_MEAN )
+            print('GUI - resized_image.shape :',resized_image.shape)
+            print('GUI - resized_image.max :',np.max(resized_image))
+            print('GUI - normalized_image.shape :',normalized_image.shape)
+            print('GUI - normalized_image.max :',np.max(normalized_image))
+            self.imageDF.at[ df_index,'ResizeRatio' ] = resize_ratio
 
-            ################################################################################################################
-            # VV Circle Stuff
-            ################################################################################################################
-            # get prev_img_df here to possibly add in prev segmentation
-            prev_img_df = self.imageDF[ 
-                            (self.imageDF['cameraID']==self.imageDF.loc[df_index,'cameraID']) &
-                            (self.imageDF['year']==self.imageDF.loc[df_index,'year']) &
-                            (self.imageDF['month']==self.imageDF.loc[df_index,'month']) &
-                            (self.imageDF['day']==self.imageDF.loc[df_index,'day']) &
-                            (self.imageDF['index_num'] < df_index)
-                            #TODO maybe we still want to only compare against prev good imgs?
-                            #(self.imageDF['index_num'].isin(self.good_df_indices))
-                            #(self.imageDF['index_num'].isin(self.good_df_indices))
-                            ]
+            #print('np.max(normalized_image) :',np.max(normalized_image) )
+            #print('np.min(normalized_image) :',np.min(normalized_image) )
 
-            use_last_seg == False
-            if len(prev_img_df) > 0 and last_seg_good == True:
-                use_last_seg = True
-            #TODO make variable to test prev segmentation (all lesions ~same size)
-            ################################################################################################################
-            # ^^ Circle Stuff
-            ################################################################################################################
+            #################################################
+            # testing
+            #TODO do I need this? below()
+            #DATA_DIRECTORY = resized_image_dir
+            data_list_pth = txt_dir
+
+            #postprocess_slide_dir = os.path.join( postprocess_dir,slidename )
+            #if not os.path.exists( postprocess_slide_dir ):
+            #    os.makedirs( postprocess_slide_dir )
 
 #############################################################################################################################
 #############################################################################################################################
+
+            # Add 4th channel (blank or prev_segmentation)
+            h,w,c = normalized_image.shape
+            input_image = np.zeros( (h,w,4) )
+            input_image[:,:,:3] = normalized_image
+            if self.goodSeg == True and self.imageDF.loc[df_index-1,'cameraID'] == self.imageDF.loc[df_index,'cameraID']:
+                input_image[:,:,3] = self.prev_segmentation
+
             preprocess_start_time = time.time()
 
 
@@ -878,35 +888,20 @@ class GUI(tk.Frame):
             with torch.no_grad():
                 end = time.time()
 
-                # use resized image in the newer models
-                if model_id == 'LEAF_UNET_FULL512_July21.pth' or model_id == 'LEAF_UNET_FULL512_Dilated_Aug21.pth':
-                    formatted_img = np.transpose(normalized_image,(2,0,1)) # transpose because channels first
-                else:
-                    formatted_img = np.transpose(resized_image,(2,0,1)) # transpose because channels first
-                formatted_img = formatted_img.astype(np.float32)
 
-                ################################################################################################################
-                # VV Circle Stuff
-                ################################################################################################################
-                if use_last_seg == True:
-                    formatted_img = np.concatenate([formatted_img,prev_msk],axis=0)
-                elif use_last_seg == False:
-                    formatted_img = np.concatenate([formatted_img,blank_img],axis=0)
-                formatted_img = formatted_img.astype(np.float32)
-                ################################################################################################################
-                # ^^ Circle Stuff
-                ################################################################################################################
+                    
+                formatted_img = np.transpose(input_image,(2,0,1)) # transpose because channels first
 
+
+                formatted_img = formatted_img.astype(np.float32)
                 image_tensor = torch.from_numpy(np.expand_dims(formatted_img,axis=0))
                 output = model(image_tensor).to(device)
                 Softmax = torch.nn.Softmax2d()
                 pred = torch.max(Softmax(output), dim=1, keepdim=True)
-
                 #print( 'max(pred) :',np.max(pred) )
 
                 #msk = torch.squeeze(pred[1][ind]).data.cpu().numpy()
                 msk = torch.squeeze(pred[1]).data.cpu().numpy()
-                prev_mask = msk
                 #print( 'max(msk) :',np.max(msk) )
 
                 pred_im_rgb = vl2im(msk)
@@ -1000,6 +995,10 @@ class GUI(tk.Frame):
 
             # Here the leaf_bgr is the entire image except for 'lesion', which is the lesion segmentation
             ret,lesion_mask = cv2.threshold( lesion,200,255,cv2.THRESH_BINARY_INV )
+
+            #TODO
+            self.prevSegmentation = lesion_mask
+
             lesion_mask_inv = cv2.bitwise_not( lesion_mask )
             leaf_bgr = cv2.bitwise_and( leaf_img,leaf_img,mask=lesion_mask_inv )
             lesion_fg = cv2.bitwise_and( imag,imag,mask=lesion_mask )
@@ -1052,12 +1051,8 @@ class GUI(tk.Frame):
             # add reordered contours to the DF
             self.addContoursToDF( contours_reordered,df_index )
 
-            # check quality of segmentation (compare size of all the lesions) -> store in last_seg_good bool
-            last_seg_good = self.checkSegQual( contours_reordered )
-            if last_seg_good:
-                print('\tGood Segmentation')
-            else:
-                print('\tBad Segmentation')
+            # check if segmentation was good
+            self.goodSeg = self.checkSegQuality( contours_reordered )
 
             # draw rectangles around the lesions
             self.drawRecsAndSaveImg( contours_reordered,im_to_write,imgsWLesions_dir,df_index )
