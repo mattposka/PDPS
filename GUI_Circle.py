@@ -16,6 +16,7 @@ import torch
 from torch.utils import data
 #from utils.datasets import LEAFTest
 from utils.datasetsFull import LEAFTest
+import postprocess as pp
 
 #from model.u_net import UNet
 #from model.u_net2 import UNet2
@@ -52,47 +53,6 @@ import shutil
 
 # There is a UserWarning for one pytorch layer that I dont' want printing
 warnings.filterwarnings('ignore',category=UserWarning)
-
-#TODO delete images if they produce good results - only save intermediate images/steps
-# for images that are broken for bugfixing later.
-# - rename directories more clearly
-# - test circle filter
-# - check lesion ordering 
-#   - especially when a lesion dissapears
-# - shrink new network
-#   - add dilated kernel in first layer
-#   - don't upscale before skip connections?
-#   - use dense layer at the very end?
-#   - check other deep supervision networks
-# - change the ratio of good to bad images for the training set
-#
-# Files to Keep if Bad Segmentation:
-# - patches/images/* - This is the input patches to the network                             +
-# - Add original Leaf Image or reconstruct function in Notebook for examining?              
-# - masks/leaf_masks/*.png - mask of leaf from input image                                  +
-# - masks/lesion_masks/* - segmentation of each individual patch                            +
-#   - probably not needed if reconstructed segmentation is saved (resultFiles/)
-#
-# Files to Delete after every image:
-# log/ - Nothing really saved here                                                          +
-# PatchNet/ - This is just npz files used in processing                                     + 
-# txt/ - Nothing really saved here                                                          +
-# masks/leaf_masks/*.p                                                                      +
-# 
-# Files to delete only if segmentation is Good:
-# patches/images/IMG_NAME/
-# masks/leaf_masks/IMG_NAME
-# masks/lesion_masks/IMG_NAME/
-#
-# Idea - use another network to go from regions segmented by first network to 
-# full segmentation in lower resolutio
-# 
-# or maybe just decrease the resolution of all of the training and input images
-# to save space and get better segmentation?
-# What to do:
-# Add all training images to GPU server computer and generate new training set there
-
-# TODO os.remove() and os.rmdir() or os.removedirs()
 
 imagelst = []
 current = 0
@@ -397,42 +357,7 @@ class GUI(tk.Frame):
         imagelst = self.imageDF['filename']
         return imagelst
 
-    # Not used right now
-    # keeps the largest [num_lesions] lesions
-    def numLesionsFilter( self,new_labeled_img ):
-        label_props_area_list = np.zeros( shape=[len(new_labeled_img),2] )
-        label_props = regionprops( new_labeled_img )  
-        for l,prop in enumerate(label_props):
-            label_props_area_list[ l,0 ] = prop.label
-            label_props_area_list[ l,1 ] = prop.area
-        sorted_area_list = label_props_area_list[ np.argsort( label_props_area_list[:,1] ) ]
-        areas_to_remove = sorted_area_list[ :(-1*self.num_lesions),: ]
-    
-        for area in range( len( areas_to_remove ) ):
-            new_labeled_img = np.where( new_labeled_img==areas_to_remove[area,0],0,new_labeled_img )
-
-        return new_labeled_img
-
-    # fills doughnuts, but objects must be fully closed for it to work
-    def fillHoles( self,img ):
-        #######################################################################################################
-        # floolfill stuff
-        #######################################################################################################
-        img_copy = img.copy() 
-        img_copy[ img_copy!=0 ] = 255
-        holes = img_copy.copy()
-        h,w = img.shape[:2]
-        mask_to_fill = np.zeros( (h+2,w+2),np.uint8 )
-        # Floodfill from point (0,0) (known background)
-        cv2.floodFill( holes,mask_to_fill,(0,0),255 )
-        # Invert floodfilled image
-        holes = cv2.bitwise_not( holes )
-        filled_holes = cv2.bitwise_or( img_copy,holes )
-        ######################################################################################################
-        filled_holes[ filled_holes!=0 ] = 1
-        img = filled_holes
-        return img
-
+    # Formats the original dataframe based off of the images selected
     def formatDF( self, ):
         for i in range( self.num_lesions ):
             area_str = 'l'+str(i+1)+'_area'
@@ -483,229 +408,7 @@ class GUI(tk.Frame):
         self.imageDF[ 'HoursElapsed' ] = hours_elapsed
         self.imageDF[ 'ResizeRatio' ] = 0
 
-    # This will try to combine regions that are very close to one another
-    #TODO check expand_ratio - changed to zero to fix very long lesions
-    def combineRegions( self,labeled_img,ref_ecc,pred_img_pth,leaf_mask,expand_ratio=0,mal=450 ):
-        circle_img = np.asarray( labeled_img,dtype=np.uint8 )
-        contours,heir = cv2.findContours( circle_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE )
-
-        centers = []
-        for c in contours:
-            (x,y),r = cv2.minEnclosingCircle( c ) 
-            if r > 5 and r < int(mal/2): # mal is maximum radius
-                centers.append( [x,y,r] )
-        # draws a circle over every segmented region that is slightly larger than the region
-        for c in centers:
-           cv2.circle( circle_img,(int(c[0]),int(c[1])),int(expand_ratio*c[2]),(255),-1 )
-        #cir_img_pth = pred_img_pth.replace( '.png','_circles.png' )
-        #imsave( cir_img_pth,circle_img )
-
-        # labeled the new circle image
-        labeled_circle = label(circle_img, connectivity=2)
-        #lab_cir_pth = pred_img_pth.replace( '.png','_labeledCircles.png' )
-        #imsave( lab_cir_pth,labeled_circle )
-
-        # applies the labels of the circle image to the original image,
-        # theoretically grouping regions close to one-another together.
-        labeled_circle[ labeled_img==0 ] = 0
-        labeled_image = labeled_circle
-        #lab_img_pth = pred_img_pth.replace( '.png','_labeledRegions.png' )
-        #imsave( lab_img_pth,labeled_image )
-
-        # remove small regions
-        new_props = regionprops(labeled_image)
-        labeled_img = self.regionAreaFilter( new_props,labeled_image )
-        #lab_img_pth = pred_img_pth.replace( '.png','_RegionAreaFilter.png' )
-        #imsave( lab_img_pth,labeled_image )
-
-        # remove non-circle region
-        new_props = regionprops(labeled_image)
-        labeled_img = self.circleFilter( new_props,labeled_image,ref_ecc=ref_ecc )
-        #lab_img_pth = pred_img_pth.replace( '.png','_NonCircleFilter.png' )
-        #imsave( lab_img_pth,labeled_image )
-
-        #TODO test leaf_mask filter again later
-        #new_props = regionprops(labeled_image)
-        #labeled_img = self.leafMaskFilter( new_props,labeled_image,leaf_mask )
-        #lab_img_pth = pred_img_pth.replace( '.png','_LeafMaskFilter.png' )
-        #imsave( lab_img_pth,labeled_image )
-
-        return labeled_img
-
-    # remove small regions
-    def regionAreaFilter( self,new_props,labeled_img,min_lesion_area=35 ):
-        for i, reg in enumerate(new_props):
-            if reg.area < min_lesion_area:
-                labeled_img[labeled_img == reg.label] = 0
-        return labeled_img
-
-    # remove non-circle region
-    def circleFilter( self,new_props,labeled_img,ref_ecc ):
-        for i, reg in enumerate(new_props):
-            if reg.eccentricity > ref_ecc:
-                labeled_img[labeled_img == reg.label] = 0
-            #print('reg.equivalent_diameter :',reg.equivalent_diameter )
-            #print('reg.major_axis_length :',reg.major_axis_length )
-            if reg.equivalent_diameter < 0.6*reg.major_axis_length: 
-                labeled_img[labeled_img == reg.label] = 0
-        return labeled_img
-
-    # remove lesion areas that are outside of the leaf mask
-    def leafMaskFilter( self,new_props,labeled_img,leaf_mask ):
-        for i, reg in enumerate(new_props):
-            bb = reg.bbox #min_row,min_col,max_row,max_col
-            # [min,max) -> have to -1 to the max
-            corners = [[bb[0],bb[1]],
-                            [bb[0],bb[3]-1],
-                            [bb[2]-1,bb[1]],
-                            [bb[2]-1,bb[3]-1],
-                            ]
-            for c in corners:
-                if not leaf_mask[c[0],c[1]]:
-                    labeled_img[labeled_img == reg.label] = 0
-        return labeled_img
-
-
-    # draws cirles inside of every region to fill holes, doughnuts, and crescents
-    def drawCircles( self,labeled_img,postProcessed_img_pth ):
-
-        new_labeled_img8 = np.asarray( labeled_img,dtype=np.uint8 )
-        contours,heir = cv2.findContours( new_labeled_img8,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE )
-
-        centers = []
-        for c in contours:
-            (x,y),r = cv2.minEnclosingCircle( c ) 
-            if r > 5:
-                centers.append( [x,y,r] )
-
-        new_labeled_img_3d = cv2.cvtColor( new_labeled_img8,cv2.COLOR_GRAY2BGR )
-        for c in centers:
-           cv2.circle( new_labeled_img_3d,(int(c[0]),int(c[1])),int(0.7*c[2]),(0,255,0),2 )
-        #circleimgpath = postProcessed_img_pth.replace( '.png','_circleFill.png' )
-        #imsave( circleimgpath,new_labeled_img_3d )
-
-        new_img = cv2.cvtColor( new_labeled_img_3d,cv2.COLOR_BGR2GRAY )
-        new_img[ new_img != 0 ] = 1
-        new_img = self.fillHoles( new_img )
-
-        return new_img
-
-    # Sort by contour size and take n_lesion largest areas, then sort by x+y locations
-    def sortAndFilterContours( self,contour_arr,imgsWLesions_dir,df_index ):
-        # This is where the largest [num_lesions] lesions are kept
-        # also sorts by y and x values
-        #contour_arr = contour_arr[ contour_arr[:,7].argsort() ][-self.num_lesions:,:]
-        contour_arr = contour_arr[contour_arr[:, 7].argsort()][:-1,:] #remove the biggest region because it is background
-        contour_arr = contour_arr[contour_arr[:,7].argsort()][-self.num_lesions:,:]
-        contour_arr = contour_arr[ contour_arr[:,5].argsort() ]
-        contour_arr = contour_arr[ contour_arr[:,6].argsort(kind='mergesort') ]
-
-        return contour_arr
-
-    # Checks the lesions order to the previous lesions in the same leaf
-    # TODO probably need to fix this
-    def checkLesionOrder( self,df_index,contours_ordered ):
-        prev_img_df = self.imageDF[ 
-                        (self.imageDF['cameraID']==self.imageDF.loc[df_index,'cameraID']) &
-                        (self.imageDF['year']==self.imageDF.loc[df_index,'year']) &
-                        (self.imageDF['month']==self.imageDF.loc[df_index,'month']) &
-                        (self.imageDF['day']==self.imageDF.loc[df_index,'day']) &
-                        #(self.imageDF['index_num']<df_index) &
-                        (self.imageDF['index_num'] < df_index)
-                        #TODO maybe we still want to only compare against prev good imgs?
-                        #(self.imageDF['index_num'].isin(self.good_df_indices))
-                        #(self.imageDF['index_num'].isin(self.good_df_indices))
-                        ]
-        # Here contours_ordered will be:
-        # [ w*h,x,y,x+w,y+h,cx,cy,area ]
-        if len(prev_img_df) > 0:
-            prev_img_df = prev_img_df.reset_index(drop=True)
-            #print('HERE@@@@@@@@@@')
-            pd.set_option('display.max_columns', None)
-            #print('prev_img_df :',prev_img_df)
-            dfl = len( prev_img_df )
-            #print( 'dfl-1 :',prev_img_df.iloc[dfl-1,:])
-            contours_reordered = np.zeros( shape=(self.num_lesions,8) )
-            lesion_number_taken = []
-            for i in range( self.num_lesions ):
-                xs = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xstart']
-                xe = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xend']
-                ys = prev_img_df.at[dfl-1,'l'+str(i+1)+'_ystart']
-                ye = prev_img_df.at[dfl-1,'l'+str(i+1)+'_yend']
-                #print('xs,xe,ys,ye :',xs,xe,ys,ye)
-
-                found = False
-                if xs != 0 and xe != 0 and ys != 0 and ye != 0:
-                    for j in range( len(contours_ordered) ):
-                        cx = contours_ordered[j,5]
-                        cy = contours_ordered[j,6]
-                        if cx > xs and cx < xe and cy > ys and cy < ye and found == False:
-                            contours_reordered[i,:] = contours_ordered[j,:]
-                            found = True
-                            lesion_number_taken.append(j)
-                else:
-                    for j in range( len(contours_ordered) ):
-                        if j not in lesion_number_taken and found == False:
-                            contours_reordered[i,:] = contours_ordered[j,:]
-                            lesion_number_taken.append(j)
-                            found = True
-        else:
-            contours_reordered = contours_ordered
-        return contours_reordered
-
-    # Adds reordered contours to the DF
-    def addContoursToDF( self,contours_reordered,df_index ):
-        for l in range( self.num_lesions ):
-            if l < len(contours_reordered):
-                area_str = 'l'+str(l+1)+'_area'
-                self.imageDF.at[ df_index,area_str ] = contours_reordered[l,7]
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_centerX' ] = contours_reordered[l,5]
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_centerY' ] = contours_reordered[l,6]
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_xstart' ] = contours_reordered[l,1]
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_xend' ] = contours_reordered[l,3]
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_ystart' ] = contours_reordered[l,2]
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_yend' ] = contours_reordered[l,4]
-            else:
-                area_str = 'l'+str(l+1)+'_area'
-                self.imageDF.at[ df_index,area_str ] = 0
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_centerX' ] = 0
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_centerY' ] = 0
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_xstart' ] = 0
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_xend' ] = 0
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_ystart' ] = 0
-                self.imageDF.at[ df_index,'l'+str(l+1)+'_yend' ] = 0
-
-        #slf_size = 1000
-        #slf = contours_reordered[:self.num_lesions,7]
-        #too_small = False
-        #for i in slf:
-        #    if i < 1000:
-        #        too_small = True
-
-        #if len( contours_reordered ) < self.num_lesions or 0 in contours_reordered or too_small == True:
-        if len(contours_reordered) < self.num_lesions or 0 in contours_reordered:
-            self.bad_df_indices.append( df_index )
-        else:
-            self.good_df_indices.append( df_index )
-
-    # check if segmentation was good
-    def checkSegQuality( self,contours_reordered ):
-        areas = contours_reordered[:,7]
-
-        goodSeg = False
-        if len(areas) > 0:
-            mean_area = np.mean(areas)
-            max_area = np.max(areas)
-            min_area = np.min(areas)
-
-            goodSeg = True
-            if min_area < 0.5*mean_area:
-                goodSeg = False
-            if max_area > 0.5*mean_area:
-                goodSeg = False
-
-        return goodSeg
-
+    #TODO maybe this can be moved to the postProcessing.py file
     # draw rectangles around the lesions
     def drawRecsAndSaveImg( self,contours_reordered,im_to_write,imgsWLesions_dir,df_index ):
         for j in range( len(contours_reordered) ):
@@ -719,7 +422,7 @@ class GUI(tk.Frame):
         cv2.imwrite( img_sav_pth,im_to_write )
 
 
-    #TODO making n='' for now
+    #TODO Test what n does
     def process(self,n=''):
 
         n = int( self.gpuNumEntry.get() )
@@ -765,11 +468,11 @@ class GUI(tk.Frame):
         if not os.path.exists(imgsWLesions_dir):
             os.makedirs(imgsWLesions_dir)
 
-        ###################################################################
         # make directory to hold pytorch models
         model_dir = os.path.join( 'pytorch_models' )
         if not os.path.exists( model_dir ):
             os.makedirs( model_dir )
+
         # choose pytorch model based off of model type
         model_id = self.model_name
         model_pth = os.path.join( model_dir,( model_id ) )
@@ -790,19 +493,12 @@ class GUI(tk.Frame):
         if '512' in model_id:
             patch_size = 512
 
-        INPUT_SIZE = (patch_size, patch_size)
-        ref_ecc = 0.92  # post-processing
         #IMG_MEAN = np.array((62.17962105572224, 100.62603236734867, 131.60830906033516), dtype=np.float32)
         IMG_MEAN = np.array((128.95671, 109.307915, 96.25992), dtype=np.float32) # R G B
 
-        good_file_started = False
-        bad_file_started = False
+
         file_started = False
         self.goodSeg = False
-        self.bad_df_indices = []
-        self.good_df_indices = []
-
-        #print('self.imageDF[name] :',self.imageDF['name'])
 
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print( '\tUsing device:',device )
@@ -828,6 +524,7 @@ class GUI(tk.Frame):
         model = nn.DataParallel(model)
         model.to(device)
         saved_state_dict = torch.load(RESTORE_FROM, map_location=lambda storage, loc: storage)
+
         #num_examples = saved_state_dict['example']
 #           print("\tusing running mean and running var")
             #log.writelines("using running mean and running var\n")
@@ -842,7 +539,6 @@ class GUI(tk.Frame):
             test_img_pth = df_row[ 'filename' ]
             filename = test_img_pth.split('/')[-1] # name of the image
             print( 'Processing image :',filename )
-            #print( 'filename :',filename )
             slidename = filename[:-4] # slidename is just the name of the image w/o extension
             #TODO can I replace slidename with imageName?
 
@@ -852,34 +548,23 @@ class GUI(tk.Frame):
             # image_fg_size is the size of the side of the square containing the entire unresized leaf
             # save this number for later use when to determine the actual size of all of the lesions later
             resized_image, normalized_image, leaf_mask, resize_ratio = process_tif(test_img_pth,log,patch_size,mean=IMG_MEAN )
-            print('GUI - resized_image.shape :',resized_image.shape)
-            print('GUI - resized_image.max :',np.max(resized_image))
-            print('GUI - normalized_image.shape :',normalized_image.shape)
-            print('GUI - normalized_image.max :',np.max(normalized_image))
+            cv2.imwrite(slidename+'resized.png',resized_image)
+#            normalized_image = cv2.cvtColor(normalized_image,cv2.COLOR_BGR2RGB)
+            #print('GUI - resized_image.shape :',resized_image.shape)
+            #print('GUI - resized_image.max :',np.max(resized_image))
+            #print('GUI - normalized_image.shape :',normalized_image.shape)
+            #print('GUI - normalized_image.max :',np.max(normalized_image))
             self.imageDF.at[ df_index,'ResizeRatio' ] = resize_ratio
 
             #print('np.max(normalized_image) :',np.max(normalized_image) )
             #print('np.min(normalized_image) :',np.min(normalized_image) )
-
-            #################################################
-            # testing
-            #TODO do I need this? below()
-            #DATA_DIRECTORY = resized_image_dir
-            data_list_pth = txt_dir
-
-            #postprocess_slide_dir = os.path.join( postprocess_dir,slidename )
-            #if not os.path.exists( postprocess_slide_dir ):
-            #    os.makedirs( postprocess_slide_dir )
-
-#############################################################################################################################
-#############################################################################################################################
 
             # Add 4th channel (blank or prev_segmentation)
             h,w,c = normalized_image.shape
             input_image = np.zeros( (h,w,4) )
             input_image[:,:,:3] = normalized_image
             if self.goodSeg == True and self.imageDF.loc[df_index-1,'cameraID'] == self.imageDF.loc[df_index,'cameraID']:
-                input_image[:,:,3] = self.prev_segmentation
+                input_image[:,:,3] = self.prevSegmentation
 
             preprocess_start_time = time.time()
 
@@ -887,22 +572,16 @@ class GUI(tk.Frame):
             batch_time = AverageMeter()
             with torch.no_grad():
                 end = time.time()
-
-
                     
                 formatted_img = np.transpose(input_image,(2,0,1)) # transpose because channels first
-
 
                 formatted_img = formatted_img.astype(np.float32)
                 image_tensor = torch.from_numpy(np.expand_dims(formatted_img,axis=0))
                 output = model(image_tensor).to(device)
                 Softmax = torch.nn.Softmax2d()
                 pred = torch.max(Softmax(output), dim=1, keepdim=True)
-                #print( 'max(pred) :',np.max(pred) )
 
-                #msk = torch.squeeze(pred[1][ind]).data.cpu().numpy()
                 msk = torch.squeeze(pred[1]).data.cpu().numpy()
-                #print( 'max(msk) :',np.max(msk) )
 
                 pred_im_rgb = vl2im(msk)
                 Fig = Image.fromarray(pred_im_rgb.astype(dtype=np.uint8))
@@ -917,35 +596,17 @@ class GUI(tk.Frame):
 #####################################################################################################################
 #####################################################################################################################
 
-            #print('\tThe total test time for ' + slidename + ' is ' + str(batch_time.sum))
-            #log.writelines('batch num:' + str(len(testloader)) + '\n')
-            #log.writelines('The total test time for ' + slidename + ' is ' + str(batch_time.sum) + '\n')
-            #print( '\nPostProcessing now!' )
+            print( '\nPostProcessing now!' )
             
-            slide_map_name_npz = slidename + '_Map.npz'
-            #slide_map_name_png = slidename + '_Map.png'
             slide_map_name_png = slidename + '_OSeg.png'
 
 
             #TODO save original image here
-            #img_orig = spm.imread(test_img_pth)
-            #print( 'test_img_pth :',test_img_pth )
-            #ro_img_pth = os.path.join( postprocess_slide_dir,slidename+'_Original.png' )
-            ro_img_pth = os.path.join( postprocess_dir,slidename+'_Original.png' )
-            #plt.imsave( ro_img_pth,resized_image )
-            cv2.imwrite( ro_img_pth,resized_image )
+            orig_img_pth = os.path.join( postprocess_dir,slidename+'_Original.png' )
+            cv2.imwrite( orig_img_pth,resized_image )
             ##################################################################################################
 
 
-            # This is the image that the neural net produces
-            #img_orig = spm.imread(test_img_pth)
-            #print('test_img_pth (img_orig):',test_img_pth)
-            #width, height = img_orig.shape[1], img_orig.shape[0]
-
-            # pred_img_pth is where the png files is previously saved
-            #TODO pred_img_pth to files_to_delete
-            #pred_img_pth = os.path.join( PredFigPath,slide_map_name_png )
-            #pred_img_pth = os.path.join( postprocess_slide_dir,slide_map_name_png )
             pred_img_pth = os.path.join( postprocess_dir,slide_map_name_png )
             #img = spm.imread(pred_img_pth)
             #img = im2vl(img) # This returns binary mask of lesion areas = 1 and background = 0
@@ -953,16 +614,18 @@ class GUI(tk.Frame):
 
             # preliminary fill holes? don't know if this is needed
             img_close = closing(img, square(3))
-            img_close = self.fillHoles( img_close )
+            img_close = pp.fillHoles( img_close )
             labeled_img = label(img_close, connectivity=2)
 
             # combine regions that are close to each other
-            labeled_img = self.combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask )
+            ref_ecc = 0.92  # post-processing
+            labeled_img = pp.combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask )
 
             # Draw circles around all areas with the same label to fill in any dounuts and crescents
             #postProcessed_img_pth = os.path.join( postprocess_slide_dir,slidename + "_postProcessed.png" )
             postProcessed_img_pth = os.path.join( postprocess_dir,slidename + "_postProcessed.png" )
-            new_img =  self.drawCircles( labeled_img,postProcessed_img_pth )
+            #new_img =  pp.drawCircles( labeled_img,postProcessed_img_pth )
+            new_img = labeled_img
 
 
             # is this needed?
@@ -972,7 +635,7 @@ class GUI(tk.Frame):
             
             #TODO i think they can be filtered later
             # Filter to num_lesions here
-            #new_labeled_img = self.numLesionsFilter( new_labeled_img )
+            #new_labeled_img = self.numLesionsFilter( new_labeled_img,self.num_lesions )
             # This should be called something else
             # Mask background was removed, regions were expanded, combined,filtered by eccentricity
             # circled, and filled.
@@ -1042,17 +705,18 @@ class GUI(tk.Frame):
 
             #print('contour_arr :',contour_arr)
             # Sort by contour size and take n_lesion largest areas, then sort by x+y locations
-            contours_ordered = self.sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index )
+            contours_ordered = pp.sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index,self.num_lesions )
             #print('contours_ordered :',contours_ordered)
             # check if lesions are in the same order
-            contours_reordered = self.checkLesionOrder( df_index,contours_ordered )
+            contours_reordered = pp.checkLesionOrder( self.imageDF,df_index,contours_ordered,self.num_lesions )
             #print('contours_reordered :',contours_reordered)
 
             # add reordered contours to the DF
-            self.addContoursToDF( contours_reordered,df_index )
+            self.imageDF = pp.addContoursToDF( self.imageDF,contours_reordered,df_index,self.num_lesions )
+
 
             # check if segmentation was good
-            self.goodSeg = self.checkSegQuality( contours_reordered )
+            self.goodSeg = pp.checkSegQuality( contours_reordered )
 
             # draw rectangles around the lesions
             self.drawRecsAndSaveImg( contours_reordered,im_to_write,imgsWLesions_dir,df_index )

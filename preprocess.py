@@ -248,37 +248,37 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
     center_h = int(top_cut + (height/2))
     center_w = int(left_cut + (width/2))
 
-    print('height :',height )
-    print('width :',width )
-    print('center_h :',center_h)
-    print('center_w :',center_w)
-    print('half_side:',half_side )
+    #print('height :',height )
+    #print('width :',width )
+    #print('center_h :',center_h)
+    #print('center_w :',center_w)
+    ##print('half_side:',half_side )
 
     
-    print('img00.shape :',img.shape)
-    print('np.max(img00) :',np.max(img) )
+    #print('img00.shape :',img.shape)
+    #print('np.max(img00) :',np.max(img) )
     img = img[center_h-half_side:center_h+half_side,center_w-half_side:center_w+half_side,:]
     r,c,_ = img.shape
     if r == 0 or c == 0:
         return rgb_sum
-    print('img000.shape :',img.shape)
-    print('np.max(img000) :',np.max(img) )
+    #print('img000.shape :',img.shape)
+    #print('np.max(img000) :',np.max(img) )
     leaf_mask = leaf_mask[center_h-half_side:center_h+half_side,center_w-half_side:center_w+half_side]
-    print('leaf_mask.shape :',leaf_mask.shape )
-    print('np.sum(leaf_mask) :',np.sum(leaf_mask))
-    print('np.max(leaf_mask) :',np.max(leaf_mask))
+    #print('leaf_mask.shape :',leaf_mask.shape )
+    #print('np.sum(leaf_mask) :',np.sum(leaf_mask))
+    #print('np.max(leaf_mask) :',np.max(leaf_mask))
     np.save('leaf_mask.npy',leaf_mask)
     r,c = leaf_mask.shape
     for i in range(c):
         for j in range(r):
             if leaf_mask[i,j] == False:
                 img[i,j,:] = 0
-    print('img020.shape :',img.shape)
-    print('np.max(img020) :',np.max(img) )
+    #print('img020.shape :',img.shape)
+    #print('np.max(img020) :',np.max(img) )
 
     resized_img = cv2.resize(img,(512,512))
-    print('resized.shape :',resized_img.shape)
-    print('np.max(resized_img) :',np.max(resized_img) )
+    #print('resized.shape :',resized_img.shape)
+    #print('np.max(resized_img) :',np.max(resized_img) )
     leaf_mask = np.array( leaf_mask,dtype=img.dtype )
     leaf_mask_resized = cv2.resize(leaf_mask,(512,512))
 
@@ -289,12 +289,12 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
     b = mean[2]
     bgr_mean = np.array((b,g,r))
     normalized_img = np.array( resized_img, dtype='float64')
-    print('normalized1.shape :',normalized_img.shape)
-    print('np.max(normalized1_img) :',np.max(normalized_img) )
+    #print('normalized1.shape :',normalized_img.shape)
+    #print('np.max(normalized1_img) :',np.max(normalized_img) )
     if np.max(img[:,:,:3]) > 1:
         normalized_img[:,:,:3] = normalized_img[:,:,:3]/255.0
-        print('normalized.shape :',normalized_img.shape)
-        print('np.max(normalized_img) :',np.max(normalized_img) )
+        #print('normalized.shape :',normalized_img.shape)
+        #print('np.max(normalized_img) :',np.max(normalized_img) )
 #    normalized_img = img - mean
 #    normalized_img = normalized_img / mean
 ###################################################################################################
