@@ -417,7 +417,7 @@ class GUI(tk.Frame):
             cv2.putText(im_to_write, str(j+1), (int(contours_reordered[j,5]), int(contours_reordered[j,6])), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 0), 1)
             start = (int(contours_reordered[j,1]),int(contours_reordered[j,2]))
             end = (int(contours_reordered[j,3]),int(contours_reordered[j,4]))
-            color = (0,0,0)
+            color = (0,255,0)
             thickness = 2
             cv2.rectangle( im_to_write,start,end,color,thickness )
         img_sav_pth = os.path.join( imgsWLesions_dir,self.imageDF.loc[df_index,'name'] )
