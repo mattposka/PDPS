@@ -552,6 +552,7 @@ class GUI(tk.Frame):
             # image_fg_size is the size of the side of the square containing the entire unresized leaf
             # save this number for later use when to determine the actual size of all of the lesions later
             resized_image, normalized_image, leaf_mask, resize_ratio = process_tif(test_img_pth,patch_size,mean=IMG_MEAN )
+            print('resize_ratio :',resize_ratio)
             cv2.imwrite(slidename+'resized.png',resized_image)
 #            normalized_image = cv2.cvtColor(normalized_image,cv2.COLOR_BGR2RGB)
             #rint('GUI - resized_image.shape :',resized_image.shape)
@@ -748,6 +749,8 @@ class GUI(tk.Frame):
                     clean_df = clean_df.drop( columns=[col] )
 
             csv_df = clean_df[df_index:df_index+1]
+            csv_df = csv_df.reset_index(drop=True)
+            #print('len(csv_df) :',len(csv_df))
 
             reformatted_csv_df = csv_df
             for i in range(self.num_lesions-1):
@@ -756,7 +759,7 @@ class GUI(tk.Frame):
             reformatted_csv_df['Lesion Area Column'] = ''
             for i in range(self.num_lesions):
                 individual_lesion_area = csv_df.at[0,'l'+str(i+1)+'_area']
-                print('individual_lesion_area :',individual_lesion_area)
+                #print('individual_lesion_area :',individual_lesion_area)
                 reformatted_csv_df.at[int(i),'Lesion Area Column'] = individual_lesion_area
 
 

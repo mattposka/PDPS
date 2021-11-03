@@ -153,6 +153,9 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
 
     h,w,c = img.shape
     original_h,original_w,original_c = img.shape
+
+    total_original_pixels = original_h*original_w
+
     img_square = np.zeros( (max(h,w),max(h,w),c),dtype=img.dtype )
     diff = max(h,w)-min(h,w)
     start_idx = int(diff/2)
@@ -258,6 +261,9 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
     #print('img00.shape :',img.shape)
     #print('np.max(img00) :',np.max(img) )
     img = img[center_h-half_side:center_h+half_side,center_w-half_side:center_w+half_side,:]
+
+    total_reshaped_pixels = 4*half_side*half_side
+
     r,c,_ = img.shape
     if r == 0 or c == 0:
         return rgb_sum
@@ -299,8 +305,8 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
 #    normalized_img = normalized_img / mean
 ###################################################################################################
 ###################################################################################################
-
-    resize_ratio = max(original_h,original_w)*max(original_h,original_w)/large_side*large_side
+    resize_ratio = total_original_pixels/total_reshaped_pixels *total_original_pixels/(512*512)
+    #resize_ratio = max(original_h,original_w)*max(original_h,original_w)/large_side*large_side
 
     stop = time()
     #print('\tPreprocessing time : ' + str(stop - start))
