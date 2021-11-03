@@ -554,23 +554,23 @@ class GUI(tk.Frame):
             resized_image, normalized_image, leaf_mask, resize_ratio = process_tif(test_img_pth,patch_size,mean=IMG_MEAN )
             cv2.imwrite(slidename+'resized.png',resized_image)
 #            normalized_image = cv2.cvtColor(normalized_image,cv2.COLOR_BGR2RGB)
-            print('GUI - resized_image.shape :',resized_image.shape)
-            print('GUI - resized_image.max :',np.max(resized_image))
-            print('GUI - normalized_image.shape :',normalized_image.shape)
-            print('GUI - normalized_image.max :',np.max(normalized_image))
+            #rint('GUI - resized_image.shape :',resized_image.shape)
+            #print('GUI - resized_image.max :',np.max(resized_image))
+            #print('GUI - normalized_image.shape :',normalized_image.shape)
+            #print('GUI - normalized_image.max :',np.max(normalized_image))
             self.imageDF.at[ df_index,'ResizeRatio' ] = resize_ratio
 
-            print('np.max(normalized_image) :',np.max(normalized_image) )
-            print('np.min(normalized_image) :',np.min(normalized_image) )
+            #print('np.max(normalized_image) :',np.max(normalized_image) )
+            #print('np.min(normalized_image) :',np.min(normalized_image) )
 
             # Add 4th channel (blank or prev_segmentation)
             h,w,c = normalized_image.shape
             input_image = np.zeros( (h,w,4) )
             input_image[:,:,:3] = normalized_image
-            print('HERE 001')
+            #print('HERE 001')
             if self.goodSeg == True and self.imageDF.loc[df_index-1,'cameraID'] == self.imageDF.loc[df_index,'cameraID']:
                 input_image[:,:,3] = self.prevSegmentation
-            print('HERE 002')
+            #print('HERE 002')
 
             preprocess_start_time = time.time()
 
@@ -580,17 +580,17 @@ class GUI(tk.Frame):
                 end = time.time()
                     
                 formatted_img = np.transpose(input_image,(2,0,1)) # transpose because channels first
-                print('HERE 003')
+                #print('HERE 003')
 
                 formatted_img = formatted_img.astype(np.float32)
                 image_tensor = torch.from_numpy(np.expand_dims(formatted_img,axis=0))
-                print('HERE 004')
+                #print('HERE 004')
                 output = model(image_tensor).to(device)
-                print('HERE 005')
+                #print('HERE 005')
                 #Softmax = torch.nn.Softmax2d()
                 #print('before pred here')
                 #pred = torch.max(Softmax(output), dim=1, keepdim=True)
-                print('pred here')
+                #print('pred here')
 
                 #msk = torch.squeeze(pred[1]).data.cpu().numpy()
                 msk = torch.squeeze(output).data.cpu().numpy()
@@ -750,9 +750,12 @@ class GUI(tk.Frame):
             reformatted_csv_df = csv_df
             for i in range(self.num_lesions-1):
                 reformatted_csv_df = reformatted_csv_df.append(csv_df)
+            reformatted_csv_df = reformatted_csv_df.reset_index(drop=True)
             reformatted_csv_df['Lesion Area Column'] = ''
             for i in range(self.num_lesions):
-                reformatted_csv_df.at[i,'Lesion Area Column'] = reformatted_csv_df.at[i,'l'+str(i+1)+'_area']
+                individual_lesion_area = csv_df.at[0,'l'+str(i+1)+'_area']
+                print('individual_lesion_area :',individual_lesion_area)
+                reformatted_csv_df.at[int(i),'Lesion Area Column'] = individual_lesion_area
 
 
             #postprocess_files = glob.glob(postprocess_slide_dir+'/*')
@@ -762,10 +765,12 @@ class GUI(tk.Frame):
             #        os.remove(f)
 
             if file_started == False:
-                csv_df.to_csv( result_file,index=False )
+                #csv_df.to_csv( result_file,index=False )
+                reformatted_csv_df.to_csv( result_file,index=False )
                 file_started = True
             else:
-                csv_df.to_csv( result_file,header=False,mode='a',index=False )
+                #csv_df.to_csv( result_file,header=False,mode='a',index=False )
+                reformatted_csv_df.to_csv( result_file,header=False,mode='a',index=False )
             #if df_index in self.good_df_indices:
                 #remove unneeded files for good runs here
 # Files to delete only if segmentation is Good:
