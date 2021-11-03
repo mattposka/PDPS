@@ -22,6 +22,7 @@ from model.u_net572 import UNet
 from model.u_netFull512 import UNetFull512
 from model.u_netFull512_Dilated import UNetFull512_Dilated
 from model.u_netCircle import UNetCircle
+from model.u_netDICE import UNetDICE
 from model.u_netFull512_Simple import UNetFull512_Simple
 import timeit
 import math
@@ -62,7 +63,7 @@ RANDOM_SEED = 1234
 #TODO
 RESTORE_FROM = ''
 SAVE_PRED_EVERY = 50
-SNAPSHOT_DIR = root_dir + 'PatchNet/snapshotsCircle_Sep2'+postfix
+SNAPSHOT_DIR = root_dir + 'PatchNet/snapshotsCircle_Sep3'+postfix
 IMGSHOT_DIR = root_dir + 'PatchNet/imgshots2'+postfix
 WEIGHT_DECAY = 0.0005
 NUM_EXAMPLES_PER_EPOCH = 1016
@@ -227,7 +228,8 @@ def main():
     #model = UNetFull512(args.num_classes)
     #model = UNetFull512_Dilated(args.num_classes)
     #model = UNetFull512_Simple(args.num_classes)
-    model = UNetCircle(args.num_classes)
+    #model = UNetCircle(args.num_classes)
+    model = UNetDICE(args.num_classes)
     model = torch.nn.DataParallel(model)
 
     optimizer = optim.SGD(model.parameters(),
@@ -330,7 +332,9 @@ def main():
             optimizer.zero_grad()
             adjust_learning_rate(optimizer, actual_step)
 
-            pred,predErode = model(images)
+            #TODO
+            #pred,predErode = model(images)
+            pred = model(images)
             image = images.data.cpu().numpy()[0]
             #print('image.shape :',image.shape )
             #print('labels0.shape :',labels.shape )
@@ -351,23 +355,26 @@ def main():
             #print('predLoss.shape :',pred.shape )
             #print('labelsLoss.shape :',labels.shape )
             lossSDL = criterionSDL(pred, labels)
-            lossBCE = loss_calc(pred,labels,class_weight)
+            #lossBCE = loss_calc(pred,labels,class_weight)
 
-            lb,lh,lw = labels.shape
-            labelsErode = labels.reshape(lb,1,lh,lw)
-            #labelsErode = K.image_to_tensor(labelsErode,keepdim=False)
-            #print('labelsErode0.shape :',labelsErode.shape)
-            kernelL = torch.tensor([[1,1,1],[1,1,1],[1,1,1]])
-            for i in range(6):
-                labelsErode = morph.erosion(labelsErode,kernelL)
-            labelsErode = labelsErode
-            labelsErode = torch.reshape(labelsErode,(lb,lh,lw))
+#TODO add back in later for erosion
+#############################################################################################
+            #lb,lh,lw = labels.shape
+            #labelsErode = labels.reshape(lb,1,lh,lw)
+            ##labelsErode = K.image_to_tensor(labelsErode,keepdim=False)
+            ##print('labelsErode0.shape :',labelsErode.shape)
+            #kernelL = torch.tensor([[1,1,1],[1,1,1],[1,1,1]])
+            #for i in range(6):
+            #    labelsErode = morph.erosion(labelsErode,kernelL)
+            #labelsErode = labelsErode
+            #labelsErode = torch.reshape(labelsErode,(lb,lh,lw))
 
-            lossSDLErode = criterionSDL(predErode,labelsErode)
-            lossBCEErode = loss_calc(predErode,labelsErode,class_weight)
-            # Then do the backwards and optimizer step
+            #lossSDLErode = criterionSDL(predErode,labelsErode)
+            #lossBCEErode = loss_calc(predErode,labelsErode,class_weight)
+            ## Then do the backwards and optimizer step
 
-            loss_total = lossSDL + lossSDLErode + 5*lossBCE + 5*lossBCEErode
+            #loss_total = lossSDL + lossSDLErode + 5*lossBCE + 5*lossBCEErode
+            loss_total = lossSDL
 
             #loss = loss_calc(pred, labels, class_weight)
             losses.update(loss_total.item(), pred.size(0))
@@ -389,7 +396,8 @@ def main():
                     val_loss = 0. 
                     for val_i_iter, val_batch in enumerate(valloader):
                         val_images, val_labels, patch_name = val_batch
-                        val_pred,val_predErode = model(val_images)
+                        #val_pred,val_predErode = model(val_images)
+                        val_pred = model(val_images)
                         val_image = val_images.data.cpu().numpy()[0]
                         val_labels = resize_target(val_labels, val_pred.size(2))
 

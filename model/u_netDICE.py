@@ -94,6 +94,7 @@ class UNetDICE(nn.Module):
         self.dense4 = nn.Conv2d(2, 1, kernel_size=1)
 
         #self.kernelE = torch.tensor([[1,1,1],[1,1,1],[1,1,1]],dtype=torch.float).cuda()
+        #self.kernelE = torch.tensor([[1,1,1],[1,1,1],[1,1,1]],dtype=torch.float)
         #self.erode1 = morph.erosion(self.kernelE)
         #self.erode2 = morph.erosion(self.kernelE)
         #self.erode3 = morph.erosion(self.kernelE)
@@ -198,12 +199,12 @@ class UNetDICE(nn.Module):
         #final1 = F.interpolate(dense4, int(x.size()[2]), mode='bilinear')
 
         #self.kernelE = torch.tensor([[1,1,1],[1,1,1],[1,1,1]])
-        #self.erode1 = morph.erosion(self.kernelE)
-        #self.erode2 = morph.erosion(self.kernelE)
-        #self.erode3 = morph.erosion(self.kernelE)
-        #self.erode4 = morph.erosion(self.kernelE)
-        #self.erode5 = morph.erosion(self.kernelE)
-        #self.erode6 = morph.erosion(self.kernelE)
+        #self.erode1 = morph.erosion(dense4,self.kernelE)
+        #self.erode2 = morph.erosion(erode1,self.kernelE)
+        #self.erode3 = morph.erosion(erode2,self.kernelE)
+        #self.erode4 = morph.erosion(erode3,self.kernelE)
+        #self.erode5 = morph.erosion(erode4,self.kernelE)
+        #self.erode6 = morph.erosion(erode5,self.kernelE)
 
 #        self.kernelE = torch.tensor([[1,1,1],[1,1,1],[1,1,1]]).cuda()
         #erode1 = morph.erosion(dense4,self.kernelE).cuda()
