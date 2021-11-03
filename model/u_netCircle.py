@@ -4,9 +4,6 @@ import torch.nn.functional as F
 from torch import nn
 from time import time
 
-import kornia as K
-from kornia import morphology as morph
-
 from .misc import initialize_weights
 
 
@@ -90,17 +87,7 @@ class UNetCircle(nn.Module):
         )
         self.dense1 = nn.Conv2d(64, 64, kernel_size=1)
         self.dense2 = nn.Conv2d(64, 16, kernel_size=1)
-        self.dense3 = nn.Conv2d(16, num_classes, kernel_size=1)
-        self.dense4 = nn.Conv2d(2, 1, kernel_size=1)
-
-        self.kernelE = torch.tensor([[1,1,1],[1,1,1],[1,1,1]],dtype=torch.float).cuda()
-        #self.erode1 = morph.erosion(self.kernelE)
-        #self.erode2 = morph.erosion(self.kernelE)
-        #self.erode3 = morph.erosion(self.kernelE)
-        #self.erode4 = morph.erosion(self.kernelE)
-        #self.erode5 = morph.erosion(self.kernelE)
-        #self.erode6 = morph.erosion(self.kernelE)
-
+        self.final = nn.Conv2d(16, num_classes, kernel_size=1)
         initialize_weights(self)
 
     def forward(self, x):
@@ -185,52 +172,9 @@ class UNetCircle(nn.Module):
 
         #dec1 = self.dec1(torch.cat([dec2, F.interpolate(enc1, dec2.size()[2:], mode='bilinear', align_corners=True)], 1))
         dense1 = self.dense1(dec1)
-        #print('dense1.size() :',dense1.size())
         dense2 = self.dense2(dense1)
-        #print('dense2.size() :',dense2.size())
-        dense3 = self.dense3(dense2)
-        #print('final.size() :',final.size())
-        dense4 = self.dense4(dense3)
-        #print('dense4.size() :',dense4.size())
-        #print('x.size() :',x.size())
-        #final_sig = self.final_sig(final2) 
-        #final_sig2 = F.interpolate(final_sig, int(x.size()[2]), mode='bilinear')
-        #final1 = F.interpolate(dense4, int(x.size()[2]), mode='bilinear')
-
-        #self.kernelE = torch.tensor([[1,1,1],[1,1,1],[1,1,1]])
-        #self.erode1 = morph.erosion(self.kernelE)
-        #self.erode2 = morph.erosion(self.kernelE)
-        #self.erode3 = morph.erosion(self.kernelE)
-        #self.erode4 = morph.erosion(self.kernelE)
-        #self.erode5 = morph.erosion(self.kernelE)
-        #self.erode6 = morph.erosion(self.kernelE)
-
-#        self.kernelE = torch.tensor([[1,1,1],[1,1,1],[1,1,1]]).cuda()
-        erode1 = morph.erosion(dense4,self.kernelE).cuda()
-        erode2 = morph.erosion(erode1,self.kernelE).cuda()
-        erode3 = morph.erosion(erode2,self.kernelE).cuda()
-        erode4 = morph.erosion(erode3,self.kernelE).cuda()
-        erode5 = morph.erosion(erode4,self.kernelE).cuda()
-        erode6 = morph.erosion(erode5,self.kernelE).cuda()
-
-        #erode1 = self.erode1(final1)
-        #erode2 = self.erode2(erode1)
-        #erode3 = self.erode3(erode2)
-        #erode4 = self.erode4(erode3)
-        #erode5 = self.erode5(erode4)
-        #erode6 = self.erode6(erode5)
-        #print('erode6.shape :',erode6.shape )
-
-
-        final1 = F.interpolate(dense4, int(x.size()[2]), mode='bilinear')
-        ob,oc,oh,ow = final1.shape
-        final1 = torch.reshape(final1,(ob,oh,ow))
-
-        final2 = F.interpolate(erode6, int(x.size()[2]), mode='bilinear')
-        final2 = torch.reshape(final2,(ob,oh,ow))
-      
-        #return F.interpolate(final, int(x.size()[2]), mode='bilinear')
-        return final1, final2
+        final = self.final(dense2)
+        return F.interpolate(final, int(x.size()[2]), mode='bilinear')
 
 
 if __name__=='__main__':
