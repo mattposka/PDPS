@@ -305,7 +305,7 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
 #    normalized_img = normalized_img / mean
 ###################################################################################################
 ###################################################################################################
-    resize_ratio = total_original_pixels/total_reshaped_pixels *total_original_pixels/(512*512)
+    resize_ratio = total_reshaped_pixels/(512*512)
     #resize_ratio = max(original_h,original_w)*max(original_h,original_w)/large_side*large_side
 
     stop = time()
