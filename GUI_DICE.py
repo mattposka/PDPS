@@ -568,8 +568,10 @@ class GUI(tk.Frame):
             input_image = np.zeros( (h,w,4) )
             input_image[:,:,:3] = normalized_image
             #print('HERE 001')
-            if self.goodSeg == True and self.imageDF.loc[df_index-1,'cameraID'] == self.imageDF.loc[df_index,'cameraID']:
-                input_image[:,:,3] = self.prevSegmentation
+            #TODO add this back in once its tested and accounted for
+            # TODO it is adding the previous segmentations as an extra channel
+            #if self.goodSeg == True and self.imageDF.loc[df_index-1,'cameraID'] == self.imageDF.loc[df_index,'cameraID']:
+            #    input_image[:,:,3] = self.prevSegmentation
             #print('HERE 002')
 
             preprocess_start_time = time.time()
