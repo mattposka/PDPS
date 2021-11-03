@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 from skimage.measure import label
 
+<<<<<<< HEAD
 img_dir = '/data/leaf_train/imgs_all/'
 
 img_files = glob.glob(img_dir+'*')
@@ -19,6 +20,16 @@ for f in img_files:
                 print( 'found' )
         if found == False:
             label_files.append(f)
+=======
+img_dir = '/home/mposka/data/mattLabeled/'
+
+img_files = glob.glob(img_dir+'*')
+
+label_files = []
+for f in img_files:
+    if 'green' in f:
+        label_files.append(f)
+>>>>>>> d539fa91231f386be49cd3600e9f7c8c6233e733
 
 for lf in label_files:
     print( 'Working on : ',lf )
