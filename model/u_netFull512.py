@@ -44,9 +44,9 @@ class _DecoderBlock(nn.Module):
         return self.decode(x)
 
 
-class UNet(nn.Module):
+class UNetFull512(nn.Module):
     def __init__(self, num_classes):
-        super(UNet, self).__init__()
+        super(UNetFull512, self).__init__()
         self.enc1 = _EncoderBlock(3, 96, ksize=5)
         self.enc2 = _EncoderBlock(96, 156, ksize=5)
         self.enc3 = _EncoderBlock(156, 256)

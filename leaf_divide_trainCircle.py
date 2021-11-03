@@ -129,7 +129,7 @@ def process_tumor_tif(file, filename, maskfile, images, labels, isValid, log, rg
             bot_cut = i
             break
    
-    img = img[top_cut:bot_cut,left_cut:right_cut]
+    img = img[top_cut:bot_cut,left_cut:right_cut,:]
     leaf_mask = leaf_mask[top_cut:bot_cut,left_cut:right_cut]
     for i in range(r):
         for j in range(c):

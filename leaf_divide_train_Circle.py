@@ -24,7 +24,7 @@ import scipy.stats as ss
 import cv2
 
 # the main program of dividing leaf
-def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isValid, log, rgb_sum ):
+def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isValid, log, rgb_sum  ):
     start = time()
     saveNormal = True
     print('Preparing :',file)
@@ -35,7 +35,18 @@ def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isVa
         return rgb_sum
 
     img = cv2.imread(file)
-    print('img.shape :',img.shape )
+    original_r,original_c,_ = img.shape
+    #print('img.shape :',img.shape )
+    h,w,c = img.shape
+    img_empty = np.zeros( (max(h,w),max(h,w),c),dtype=img.dtype )
+    diff = max(h,w)-min(h,w)
+    start_idx = int(diff/2)
+    if h==max(h,w):
+        img_empty[:,start_idx:start_idx+w,:] = img
+    else:
+        img_empty[start_idx:start_idx+h,:,:] = img
+    img = img_empty
+    #print('img010.shape :',img.shape )
 
 ##################################################################################################
 # From process_tif - Get the background
@@ -64,7 +75,6 @@ def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isVa
 
 ##################################################################################################
 # Resize Image to remove as much background as possible
-    original_r,original_c = leaf_mask.shape
     r,c = leaf_mask.shape
 
     left_cut = 0
@@ -97,19 +107,19 @@ def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isVa
     center_h = int(top_cut + (height/2))
     center_w = int(left_cut + (width/2))
 
-    print('height :',height )
-    print('width :',width )
-    print('center_h :',center_h)
-    print('center_w :',center_w)
-    print('half_side:',half_side )
+    #print('height :',height )
+    #print('width :',width )
+    #print('center_h :',center_h)
+    #print('center_w :',center_w)
+    #print('half_side:',half_side )
 
-
-    print('img00.shape :',img.shape)
+    #
+    #print('img00.shape :',img.shape)
     img = img[center_h-half_side:center_h+half_side,center_w-half_side:center_w+half_side,:]
     r,c,_ = img.shape
     if r == 0 or c == 0:
         return rgb_sum
-    print('img000.shape :',img.shape)
+    #print('img000.shape :',img.shape)
     leaf_mask = leaf_mask[center_h-half_side:center_h+half_side,center_w-half_side:center_w+half_side]
     r,c = leaf_mask.shape
     for i in range(c):
@@ -138,16 +148,32 @@ def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isVa
     mean_r = tot_r/(512*512)
     mean_g = tot_g/(512*512)
     mean_b = tot_b/(512*512)
-    print('rgb_sum :',rgb_sum)
+    #print('rgb_sum :',rgb_sum)
     rgb_sum += np.array((mean_r,mean_g,mean_b))
 
 
     mask = scipy.misc.imread(maskfile)
     mask = mask[:,:,:3]
 ##################################################################################################
+    #print( 'mask0.shape :',mask.shape )
     mask = scipy.misc.imresize(mask,(original_r,original_c))
+    #print( 'mask1.shape :',mask.shape )
+
+    h,w,c = mask.shape
+
+    mask_empty = np.zeros( (max(h,w),max(h,w),c) )
+    diff = max(h,w)-min(h,w)
+    start_idx = int(diff/2)
+    if h==max(h,w):
+        mask_empty[:,start_idx:start_idx+w,:] = mask
+    else:
+        mask_empty[start_idx:start_idx+h,:,:] = mask
+    mask = mask_empty
+    #print( 'mask2.shape :',mask.shape )
+
     #mask = mask[top_cut:bot_cut,left_cut:right_cut,:]
     mask = mask[center_h-half_side:center_h+half_side,center_w-half_side:center_w+half_side,:]
+    #print( 'mask3.shape :',mask.shape )
 ##################################################################################################
 
     #r,c,_ = mask.shape
@@ -162,6 +188,7 @@ def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isVa
     #mask = mask[rs:re,cs:ce]
 
     mask = scipy.misc.imresize(mask, (512,512) )
+    #print( 'mask4.shape :',mask.shape )
 
     # im2vl transforms mask to 1s and 0s instead of 3d 0-255 values
     mask = im2vl(mask)
@@ -169,18 +196,34 @@ def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isVa
     mask[-1:,:] = 0
     mask[:,:1] = 0
     mask[:,-1:] = 0
+    
+    pos_pixels = np.sum(mask)
+    bg_pixels = int(512*512) - int(pos_pixels)
 
 ###################################################################################
     circle = scipy.misc.imread(circlefile)
-    print('circle0.shape :',circle.shape)
-    print('circle0.mean :',np.mean(circle) )
+    #print('circle0.shape :',circle.shape)
+    #print('circle0.mean :',np.mean(circle) )
     circle = circle[:,:,:3]
 ##################################################################################################
     circle = scipy.misc.imresize(circle,(original_r,original_c))
     #circle = circle[top_cut:bot_cut,left_cut:right_cut,:]
+    #print('circle0.shape :',circle.shape)
+
+    h,w,c = circle.shape
+
+    circle_empty = np.zeros( (max(h,w),max(h,w),c) )
+    diff = max(h,w)-min(h,w)
+    start_idx = int(diff/2)
+    if h==max(h,w):
+        circle_empty[:,start_idx:start_idx+w,:] = circle
+    else:
+        circle_empty[start_idx:start_idx+h,:,:] = circle
+    circle = circle_empty
+
     circle = circle[center_h-half_side:center_h+half_side,center_w-half_side:center_w+half_side,:]
-    print('circle1.shape :',circle.shape)
-    print('circle1.mean :',np.mean(circle) )
+    #print('circle1.shape :',circle.shape)
+    #print('circle1.mean :',np.mean(circle) )
 ##################################################################################################
     #r,c,_ = circle.shape
     #square_size = np.min([r,c])
@@ -195,8 +238,8 @@ def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isVa
 
     circle = scipy.misc.imresize(circle, (512,512) )
     circle = circle[:,:,:3]
-    print('circle2.shape :',circle.shape)
-    print('circle2.mean :',np.mean(circle) )
+    #print('circle2.shape :',circle.shape)
+    #print('circle2.mean :',np.mean(circle) )
 
     # im2vl transforms circle to 1s and 0s instead of 3d 0-255 values
     circle = im2vl(circle)
@@ -204,8 +247,8 @@ def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isVa
     circle[-1:,:] = 0
     circle[:,:1] = 0
     circle[:,-1:] = 0
-    print('circle3.shape :',circle.shape)
-    print('circle3.mean :',np.mean(circle) )
+    #print('circle3.shape :',circle.shape)
+    #print('circle3.mean :',np.mean(circle) )
     
     if np.max(circle) != 1:
         print('Something Wrong?')
@@ -231,7 +274,7 @@ def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isVa
         #cv2.imwrite(circlename,cir_img)
 
         circlename = os.path.join(Tumordir, filename[:-4] + '_FullC.npy')
-        print('np.max(cir_img[:,:,3]) :',np.max(cir_img[:,:,3]))
+        #print('np.max(cir_img[:,:,3]) :',np.max(cir_img[:,:,3]))
         np.save(circlename,cir_img)
 
         #labelname = filename.replace( 'original','green' )
@@ -266,7 +309,7 @@ def process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isVa
     stop = time()
 #    print('processing time : ' + str(stop - start))
     log.writelines('processing time : ' + str(stop - start) + '\n')
-    return rgb_sum
+    return rgb_sum, pos_pixels, bg_pixels
 
 
 if __name__ == '__main__':
@@ -320,6 +363,8 @@ if __name__ == '__main__':
     total_start = time()
 
     image_number = 1
+    pos_pixels_tot = 0
+    bg_pixels_tot = 0
     for pth, dirs, filenames in chain.from_iterable(os.walk(path) for path in img_pth):
         for filename in filenames:
             if not "original" in filename:
@@ -334,7 +379,13 @@ if __name__ == '__main__':
                 isValid = True
             else:
                 isValid = False
-            rgb_sum = process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isValid, log, rgb_sum )
+
+            rgb_sum,pos_pixels,bg_pixels = process_tumor_tif(file, filename, maskfile, circlefile, images, labels, isValid, log, rgb_sum )
+
+            pos_pixels_tot = pos_pixels_tot + pos_pixels
+            print('pos_pixels :',pos_pixels_tot)
+            bg_pixels_tot = bg_pixels_tot + bg_pixels
+            print('bg_pixels :',bg_pixels_tot)
             image_number += 1
 
     total_stop = time()

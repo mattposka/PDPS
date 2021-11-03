@@ -4,6 +4,7 @@ from __future__ import print_function
 import argparse
 import torch
 from torch.utils import data
+import torch.nn as nn
 import numpy as np
 import cv2
 from torch.autograd import Variable
@@ -30,13 +31,16 @@ from utils.transforms import vl2im
 from utils.misc import Logger
 import sys
 
+import kornia as K
+from kornia import morphology as morph
+
 start = timeit.default_timer()
 
 IMG_MEAN = np.array((96.25992, 109.307915 , 128.95671), dtype=np.float32)  # BGR
 
 BATCH_SIZE = 6
-#MAX_EPOCH = 100
-MAX_EPOCH = 1000
+MAX_EPOCH = 200
+#MAX_EPOCH = 500
 GPU = "2"
 root_dir = '/data/leaf_train/green/Sep2021/'
 DATA_LIST_PATH = root_dir + 'Circle/train.txt'
@@ -49,7 +53,7 @@ NUM_CLASSES = 2
 # wl: weighted loss
 postfix = "-fb"
 #CLASS_DISTRI = [1.0, 1.0]  # [90,272,867, 2,001,821]
-CLASS_DISTRI = [15.0, 1.0]  # [92,988,518 2,956,186]
+CLASS_DISTRI = [12.0, 1.0]  # [92,988,518 2,956,186]
 POWER = 0.9
 RANDOM_SEED = 1234
 #RESTORE_FROM = "/data/AutoPheno/green/200527/PatchNet/snapshots-fb/LEAF_UNET_B0064_S010700.pth"
@@ -58,10 +62,10 @@ RANDOM_SEED = 1234
 #TODO
 RESTORE_FROM = ''
 SAVE_PRED_EVERY = 50
-SNAPSHOT_DIR = root_dir + 'PatchNet/snapshotsCircle_Sep'+postfix
-IMGSHOT_DIR = root_dir + 'PatchNet/imgshots'+postfix
+SNAPSHOT_DIR = root_dir + 'PatchNet/snapshotsCircle_Sep2'+postfix
+IMGSHOT_DIR = root_dir + 'PatchNet/imgshots2'+postfix
 WEIGHT_DECAY = 0.0005
-NUM_EXAMPLES_PER_EPOCH = 732
+NUM_EXAMPLES_PER_EPOCH = 1016
 NUM_STEPS_PER_EPOCH = math.ceil(NUM_EXAMPLES_PER_EPOCH / float(BATCH_SIZE))
 MAX_ITER = max(NUM_EXAMPLES_PER_EPOCH * MAX_EPOCH + 1,
                NUM_STEPS_PER_EPOCH * BATCH_SIZE * MAX_EPOCH + 1)
@@ -77,7 +81,6 @@ print(VAL_LIST_PATH)
 print("num of epoch:", MAX_EPOCH)
 print("RESTORE_FROM:", RESTORE_FROM)
 print(NUM_EXAMPLES_PER_EPOCH)
-print( 'GPU :',GPU )
 
 
 def get_arguments():
@@ -142,16 +145,53 @@ def get_arguments():
 args = get_arguments()
 
 
+#def loss_calc(pred, label, class_weight=None):
+#    """
+#    This function returns cross entropy loss for semantic segmentation
+#    """
+#    # out shape batch_size x channels x h x w -> batch_size x channels x h x w
+#    # label shape h x w x 1 x batch_size  -> batch_size x 1 x h x w
+#    label = Variable(label.long()).cuda()
+#    print('labelLC.shape :',label.shape )
+#    criterion = torch.nn.CrossEntropyLoss(weight=torch.Tensor(class_weight)).cuda()
+#
+#    return criterion(pred, label)
+
 def loss_calc(pred, label, class_weight=None):
     """
     This function returns cross entropy loss for semantic segmentation
     """
     # out shape batch_size x channels x h x w -> batch_size x channels x h x w
     # label shape h x w x 1 x batch_size  -> batch_size x 1 x h x w
-    label = Variable(label.long()).cuda()
-    criterion = torch.nn.CrossEntropyLoss(weight=torch.Tensor(class_weight)).cuda()
+    weight_tensor = np.ones(label.shape)
+    weight_tensor = np.where(label==0,class_weight[0],class_weight[1])
+    weight_tensor = torch.Tensor(weight_tensor).cuda()
+
+    label = Variable(label.float()).cuda()
+    ob,oh,ow = label.shape
+    criterion = torch.nn.BCEWithLogitsLoss(pos_weight=weight_tensor).cuda()
 
     return criterion(pred, label)
+
+class SoftDiceLoss(nn.Module):
+    def __init__(self, weight=None, size_average=True):
+        super(SoftDiceLoss, self).__init__()
+
+    def forward(self, logits, targets): # pred,label
+        smooth = 1
+        num = targets.size(0)
+        """
+       I am assuming the model does not have sigmoid layer in the end. if that is the case, change torch.sigmoid(logits) to simply logits
+        """
+        targets = Variable(targets.float()).cuda()
+        probs = torch.sigmoid(logits)
+        m1 = probs.view(num, -1)
+        m2 = targets.view(num, -1)
+        intersection = (m1 * m2)
+
+        score = 2. * (intersection.sum(1) + smooth) / (m1.sum(1) + m2.sum(1) + smooth)
+        score = 1 - score.sum() / num
+        return score
 
 
 def lr_poly(base_lr, iter, max_iter, power):
@@ -275,6 +315,7 @@ def main():
     cnt = 0
     actual_step = args.start_step
     val_loss_list = []
+    train_loss_list = []
     while actual_step < args.final_step:
         #print('here2')
         iter_end = timeit.default_timer()
@@ -289,38 +330,82 @@ def main():
             optimizer.zero_grad()
             adjust_learning_rate(optimizer, actual_step)
 
-            pred = model(images)
+            pred,predErode = model(images)
             image = images.data.cpu().numpy()[0]
+            #print('image.shape :',image.shape )
+            #print('labels0.shape :',labels.shape )
             labels = resize_target(labels, pred.size(2))
+            #print('labels1.shape :',labels.shape )
 
-            loss = loss_calc(pred, labels, class_weight)
-            losses.update(loss.item(), pred.size(0))
+##TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO
+##TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO#TODO
+#######################################################################################
+#            image = image.transpose(1, 2, 0)
+#            image = cv2.resize(image, (512,512), interpolation=cv2.INTER_NEAREST)
+#            np.save('im'+str(actual_step)+'.npy',image)
+#######################################################################################
+
+            #criterion = SoftDiceLoss().to(cuda()) # to put on cuda or cpu
+            criterionSDL = SoftDiceLoss().cuda() # to put on cuda or cpu
+            # In the training loop
+            #print('predLoss.shape :',pred.shape )
+            #print('labelsLoss.shape :',labels.shape )
+            lossSDL = criterionSDL(pred, labels)
+            lossBCE = loss_calc(pred,labels,class_weight)
+
+            lb,lh,lw = labels.shape
+            labelsErode = labels.reshape(lb,1,lh,lw)
+            #labelsErode = K.image_to_tensor(labelsErode,keepdim=False)
+            #print('labelsErode0.shape :',labelsErode.shape)
+            kernelL = torch.tensor([[1,1,1],[1,1,1],[1,1,1]])
+            for i in range(6):
+                labelsErode = morph.erosion(labelsErode,kernelL)
+            labelsErode = labelsErode
+            labelsErode = torch.reshape(labelsErode,(lb,lh,lw))
+
+            lossSDLErode = criterionSDL(predErode,labelsErode)
+            lossBCEErode = loss_calc(predErode,labelsErode,class_weight)
+            # Then do the backwards and optimizer step
+
+            loss_total = lossSDL + lossSDLErode + 5*lossBCE + 5*lossBCEErode
+
+            #loss = loss_calc(pred, labels, class_weight)
+            losses.update(loss_total.item(), pred.size(0))
+            # This is just for recording and printing out
+            #losses.update(lossErode.item(), pred.size(0))
             acc = _pixel_accuracy(pred.data.cpu().numpy(), labels.data.cpu().numpy())
             accuracy.update(acc, pred.size(0))
-            loss.backward()
+            
+            #loss.backward()
+            #lossErode.backward()
+            loss_total.backward()
             optimizer.step()
 
             #########################################################################################3
             STOP_EARLY = False
-            EPOCHS_BEFORE_STOPPING = 4
+            EPOCHS_BEFORE_STOPPING = 8
             if actual_step % NUM_STEPS_PER_EPOCH == 0:
                 with torch.no_grad():
                     val_loss = 0. 
                     for val_i_iter, val_batch in enumerate(valloader):
                         val_images, val_labels, patch_name = val_batch
-                        val_pred = model(val_images)
+                        val_pred,val_predErode = model(val_images)
                         val_image = val_images.data.cpu().numpy()[0]
                         val_labels = resize_target(val_labels, val_pred.size(2))
 
-                        v_loss = loss_calc(val_pred, val_labels, class_weight)
+                        #v_loss = loss_calc(val_pred, val_labels, class_weight)
+                        criterionSDL = SoftDiceLoss().cuda() # to put on cuda or cpu
+                        # In the training loop
+                        v_loss = criterionSDL(val_pred, val_labels)
                         val_loss += v_loss.item()
                 val_loss_list.append(val_loss)
+                train_loss_list.append(losses.val)
                 
-                if len(val_loss_list) > EPOCHS_BEFORE_STOPPING:
-                    if val_loss_list[-1] > val_loss_list[-1*(EPOCHS_BEFORE_STOPPING+1)]:
-                        STOP_EARLY = True
-                        print('STOPPING EARLY!!!!!!!')
-                    print('Val Loss :',val_loss_list[-1*(EPOCHS_BEFORE_STOPPING+1):])
+                #if len(val_loss_list) > EPOCHS_BEFORE_STOPPING:
+                #    if val_loss_list[-1] > val_loss_list[-1*(EPOCHS_BEFORE_STOPPING+1)]:
+                #        STOP_EARLY = True
+                #        print('STOPPING EARLY!!!!!!!')
+                #    print('Val Loss :',val_loss_list[-1*(EPOCHS_BEFORE_STOPPING+1):])
             #########################################################################################3
 
             batch_time.update(timeit.default_timer() - iter_end)
@@ -343,14 +428,23 @@ def main():
                 msk_size = pred.size(2)
                 image = image.transpose(1, 2, 0)
                 image = cv2.resize(image, (msk_size, msk_size), interpolation=cv2.INTER_NEAREST)
-                image[:,:,:3] = image[:,:,:3] + IMG_MEAN
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                np.save('im'+str(actual_step)+'.npy',image)
+                image2show = image[:,:,:3]
+                image2show = image2show*255
+                #image[:,:,:3] = image[:,:,:3] + IMG_MEAN
+                #image2show = cv2.cvtColor(image2show, cv2.COLOR_BGR2RGB)
                 label = labels.data.cpu().numpy()[0]
                 label = vl2im(label)
-                single_pred = pred.data.cpu().numpy()[0].argmax(axis=0)
+
+
+                #single_pred = pred.data.cpu().numpy()[0].argmax(axis=0)
+                #single_pred = vl2im(single_pred)
+                single_pred = np.where(pred.data.cpu().numpy()[0]>=0,1,0)
+                #print('single_pred.shape :',single_pred.shape)
                 single_pred = vl2im(single_pred)
+
                 new_im = Image.new('RGB', (msk_size * 3, msk_size))
-                new_im.paste(Image.fromarray(image.astype('uint8'), 'RGB'), (0, 0))
+                new_im.paste(Image.fromarray(image2show.astype('uint8'), 'RGB'), (0, 0))
                 new_im.paste(Image.fromarray(single_pred.astype('uint8'), 'RGB'), (msk_size, 0))
                 new_im.paste(Image.fromarray(label.astype('uint8'), 'RGB'), (msk_size * 2, 0))
                 new_im_name = 'B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '_' + patch_name[0].replace('.npy','.png')
@@ -378,14 +472,27 @@ def main():
                osp.join(args.snapshot_dir,
                         'LEAF_UNET_B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '_FINAL.pth'))
 
+    val_loss_list = np.array(val_loss_list)
+    train_loss_list = np.array(train_loss_list)
+
+    np.savetxt(args.snapshot_dir+'val_loss_log.txt',val_loss_list)
+    np.savetxt(args.snapshot_dir+'train_loss_log.txt',train_loss_list)
     end = timeit.default_timer()
     print(end - start, 'seconds')
 
 
+#def _pixel_accuracy(pred, target):
+#    accuracy_sum = 0.0
+#    for i in range(0, pred.shape[0]):
+#        out = pred[i].argmax(axis=0)
+#        accuracy = np.sum(out == target[i], dtype=np.float32) / out.size
+#        accuracy_sum += accuracy
+#    return accuracy_sum / args.batch_size
+
 def _pixel_accuracy(pred, target):
     accuracy_sum = 0.0
     for i in range(0, pred.shape[0]):
-        out = pred[i].argmax(axis=0)
+        out = np.where(pred[i]>=0,1,0)
         accuracy = np.sum(out == target[i], dtype=np.float32) / out.size
         accuracy_sum += accuracy
     return accuracy_sum / args.batch_size

@@ -8,6 +8,7 @@ from PIL import Image
 import torchvision.transforms.functional as F
 import random
 import matplotlib.pyplot as plt
+import scipy.ndimage
 
 
 class LEAFTrain(data.Dataset):
@@ -57,7 +58,13 @@ class LEAFTrain(data.Dataset):
         #image = cv2.imread(datafiles["img"], cv2.IMREAD_COLOR) #BGR
         #image = cv2.imread(datafiles["img"], cv2.IMREAD_UNCHANGED) #BGR
         #label = cv2.imread(datafiles["label"], cv2.IMREAD_GRAYSCALE)
+        # image comes in as BGR
         image = np.load(datafiles["img"]) #BGR
+        imMax = np.max(image)
+        #print('imMax0 :',imMax)
+        if imMax <= 1:
+            image[:,:,:3] = image[:,:,:3]*255
+        #print('imMax1 :',np.max(image))
         label = np.load(datafiles["label"])
         image = np.array(image, np.uint8)
         label = np.array(label, np.uint8)
@@ -69,39 +76,61 @@ class LEAFTrain(data.Dataset):
         #image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGBA)
         ir,ic,_ = image.shape
 #        print('image.dtype :',image.dtype)
-        image3 = Image.fromarray(image[:,:,:3])
+
+        #print('imMax2 :',np.max(image))
+        img3_bgr = image[:,:,:3]
+        #Now image is RGB
+        img3_rgb = cv2.cvtColor(img3_bgr,cv2.COLOR_BGR2RGB)
+        image3 = Image.fromarray(img3_rgb)
 
         imageC = image[:,:,3]
-        imageC = imageC.reshape((ir,ic,1))
+        #imageC = imageC.reshape((ir,ic,1))
         label = Image.fromarray(label)
         if self.is_jitter:
             image3 = self.jitter_transform(image3)
 
         image3 = np.asarray(image3)
         imageC = np.asarray(imageC)
-        image = np.concatenate([image3,imageC],axis=-1)
-        image = Image.fromarray(image)
+        #image = np.concatenate([image3,imageC],axis=-1)
+        image[:,:,:3] = image3
+        image[:,:,3] = imageC
+        #print('imMax4 :',np.max(image))
+        #image = Image.fromarray(image,mode='RGBA')
 
         if self.is_mirror:
             if random.random()<0.5:
-                image = F.hflip(image)
-                label = F.hflip(label)
+                #image = F.hflip(image)
+                #label = F.hflip(label)
+                image = np.flip(image,1)
+                label = np.flip(label,1)
         if self.is_rotate:
             angle = random.randint(0, 3)*90
-            image = F.rotate(image, angle)
-            label = F.rotate(label, angle)
+            #image = F.rotate(image, angle)
+            #label = F.rotate(label, angle)
+            image = scipy.ndimage.rotate(image,angle)
+            label = scipy.ndimage.rotate(label,angle)
 
         label = np.asarray(label)
 
+        # image is BGR again
         image = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGBA2BGRA)
+        #print('imMax5 :',np.max(image))
+
+
+        #im3c = image[:,:,:3]
+        #im4c = image[:,:,3]
+        #im3c[im4c==1] = [255,0,0]
+        #savename = datafiles['img'].split('/')[-1]
+        #savename = savename.replace('C','')
+        #savename = savename.replace('Full.npy','Processed.png')
+        #cv2.imwrite(savename,im3c)
+
+
         image = np.asarray(image, np.float32)
-#TODO TODO TODO
-#TODO TODO TODO
-#TODO TODO TODO
-        image[:,:,:3] = image[:,:,:3]/255.
-        #image[:,:,:3] = image[:,:,:3] - self.mean
-        #TODO maybe try rgb standardization?
-        #image[:,:,:3] = image[:,:,:3] / self.mean
+
+        if np.max(image) > 1:
+            image[:,:,:3] = image[:,:,:3]/255.
+        #print('imMax6 :',np.max(image))
 
 #####################################################################################3
         # Shouldn't be needed because a blank channel was added to every image in preprocessing
@@ -111,24 +140,9 @@ class LEAFTrain(data.Dataset):
             image = np.concatenate([image,cir_chan],axis=-1)
 #######################################################################################
 
-        img_h, img_w = label.shape
-        pad_h = max(self.crop_h - img_h, 0)
-        pad_w = max(self.crop_w - img_w, 0)
-        if pad_h > 0 or pad_w > 0:
-            img_pad = cv2.copyMakeBorder(image, 0, pad_h, 0,
-                                         pad_w, cv2.BORDER_CONSTANT,
-                                         value=(0.0, 0.0, 0.0))
-            label_pad = cv2.copyMakeBorder(label, 0, pad_h, 0,
-                                           pad_w, cv2.BORDER_CONSTANT,
-                                           value=(self.ignore_label,))
-        else:
-            img_pad, label_pad = image, label
-
-        img_h, img_w = label_pad.shape
-        h_off = random.randint(0, img_h - self.crop_h)
-        w_off = random.randint(0, img_w - self.crop_w)
-        image = np.asarray(img_pad[h_off: h_off + self.crop_h, w_off: w_off + self.crop_w], np.float32)
-        label = np.asarray(label_pad[h_off: h_off + self.crop_h, w_off: w_off + self.crop_w], np.float32)
+        image = np.asarray(image, np.float32)
+        #print('imMax7 :',np.max(image))
+        label = np.asarray(label, np.float32)
 
         #print('image.max :',np.max(image))
         #print('image.min :',np.min(image))
