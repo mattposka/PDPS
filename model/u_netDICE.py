@@ -4,12 +4,9 @@ import torch.nn.functional as F
 from torch import nn
 from time import time
 
-<<<<<<< HEAD
-import kornia as K
-from kornia import morphology as morph
+#import kornia as K
+#from kornia import morphology as morph
 
-=======
->>>>>>> d539fa91231f386be49cd3600e9f7c8c6233e733
 from .misc import initialize_weights
 
 
@@ -93,11 +90,10 @@ class UNetDICE(nn.Module):
         )
         self.dense1 = nn.Conv2d(64, 64, kernel_size=1)
         self.dense2 = nn.Conv2d(64, 16, kernel_size=1)
-<<<<<<< HEAD
         self.dense3 = nn.Conv2d(16, num_classes, kernel_size=1)
         self.dense4 = nn.Conv2d(2, 1, kernel_size=1)
 
-        self.kernelE = torch.tensor([[1,1,1],[1,1,1],[1,1,1]],dtype=torch.float).cuda()
+        #self.kernelE = torch.tensor([[1,1,1],[1,1,1],[1,1,1]],dtype=torch.float).cuda()
         #self.erode1 = morph.erosion(self.kernelE)
         #self.erode2 = morph.erosion(self.kernelE)
         #self.erode3 = morph.erosion(self.kernelE)
@@ -105,9 +101,6 @@ class UNetDICE(nn.Module):
         #self.erode5 = morph.erosion(self.kernelE)
         #self.erode6 = morph.erosion(self.kernelE)
 
-=======
-        self.final = nn.Conv2d(16, num_classes, kernel_size=1)
->>>>>>> d539fa91231f386be49cd3600e9f7c8c6233e733
         initialize_weights(self)
 
     def forward(self, x):
@@ -192,7 +185,6 @@ class UNetDICE(nn.Module):
 
         #dec1 = self.dec1(torch.cat([dec2, F.interpolate(enc1, dec2.size()[2:], mode='bilinear', align_corners=True)], 1))
         dense1 = self.dense1(dec1)
-<<<<<<< HEAD
         #print('dense1.size() :',dense1.size())
         dense2 = self.dense2(dense1)
         #print('dense2.size() :',dense2.size())
@@ -214,12 +206,12 @@ class UNetDICE(nn.Module):
         #self.erode6 = morph.erosion(self.kernelE)
 
 #        self.kernelE = torch.tensor([[1,1,1],[1,1,1],[1,1,1]]).cuda()
-        erode1 = morph.erosion(dense4,self.kernelE).cuda()
-        erode2 = morph.erosion(erode1,self.kernelE).cuda()
-        erode3 = morph.erosion(erode2,self.kernelE).cuda()
-        erode4 = morph.erosion(erode3,self.kernelE).cuda()
-        erode5 = morph.erosion(erode4,self.kernelE).cuda()
-        erode6 = morph.erosion(erode5,self.kernelE).cuda()
+        #erode1 = morph.erosion(dense4,self.kernelE).cuda()
+        #erode2 = morph.erosion(erode1,self.kernelE).cuda()
+        #erode3 = morph.erosion(erode2,self.kernelE).cuda()
+        #erode4 = morph.erosion(erode3,self.kernelE).cuda()
+        #erode5 = morph.erosion(erode4,self.kernelE).cuda()
+        #erode6 = morph.erosion(erode5,self.kernelE).cuda()
 
         #erode1 = self.erode1(final1)
         #erode2 = self.erode2(erode1)
@@ -234,16 +226,12 @@ class UNetDICE(nn.Module):
         ob,oc,oh,ow = final1.shape
         final1 = torch.reshape(final1,(ob,oh,ow))
 
-        final2 = F.interpolate(erode6, int(x.size()[2]), mode='bilinear')
-        final2 = torch.reshape(final2,(ob,oh,ow))
+        #final2 = F.interpolate(erode6, int(x.size()[2]), mode='bilinear')
+        #final2 = torch.reshape(final2,(ob,oh,ow))
       
         #return F.interpolate(final, int(x.size()[2]), mode='bilinear')
-        return final1, final2
-=======
-        dense2 = self.dense2(dense1)
-        final = self.final(dense2)
-        return F.interpolate(final, int(x.size()[2]), mode='bilinear')
->>>>>>> d539fa91231f386be49cd3600e9f7c8c6233e733
+        #return final1, final2
+        return final1
 
 
 if __name__=='__main__':

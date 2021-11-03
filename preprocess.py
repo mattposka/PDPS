@@ -148,8 +148,8 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
 
     img = cv2.imread(file)
 
-    print('img.shape :',img.shape )
-    print('np.max(img) :',np.max(img) )
+    #print('img.shape :',img.shape )
+    #print('np.max(img) :',np.max(img) )
 
     h,w,c = img.shape
     original_h,original_w,original_c = img.shape
@@ -161,8 +161,8 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
     else:
         img_square[start_idx:start_idx+h,:,:] = img
     img = img_square
-    print('img.shape :',img.shape )
-    print('np.max(img) :',np.max(img) )
+    #print('img.shape :',img.shape )
+    #print('np.max(img) :',np.max(img) )
 
     #r,c,_ = img.shape
     #square_size = np.min([r,c])
