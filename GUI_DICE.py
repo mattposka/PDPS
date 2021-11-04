@@ -100,6 +100,7 @@ class GUI(tk.Frame):
         self.setDirFrame()
         self.setLesionFrame()
         self.setInnocFrame()
+        self.setMetaFrame()
         self.setDescFrame()
         self.setRunFrame()
 
@@ -190,7 +191,26 @@ class GUI(tk.Frame):
 
         self.innocFrame.grid_rowconfigure( (0,1,2,3,4),weight=1 )
         self.innocFrame.grid_columnconfigure( (0,1),weight=1 )
-        self.innocFrame.grid( row=0,rowspan=2,column=2,sticky='nsew' )
+        self.innocFrame.grid( row=0,rowspan=1,column=2,sticky='nsew' )
+
+    def setMetaFrame( self, ):
+            self.metaFrame = tk.Frame( root,bg='#C0BA80',borderwidth=15,relief='ridge' )
+
+            self.metaFrame.grid_rowconfigure( (0,1,2),weight=1 )
+            self.metaFrame.grid_columnconfigure( 0,weight=1 )
+            self.metaFrame.grid( row=1,column=2,sticky='nsew' )
+
+            self.selectmetafile = tk.Button( self.metaFrame,text='Select Meta File',command=self.setMetaFile )
+            self.selectmetafile.grid( row=0,column=0,sticky='' )
+
+            self.saveMetaLabel = tk.Label( self.metaFrame,text='Meta File:' )
+            self.saveMetaLabel.grid( row=1,column=0,sticky='s' )
+
+            self.metaFrame.update()
+            self.metaFile = 'None'
+            self.metaFileVar = tk.StringVar()
+            self.metaFileLabel = tk.Label( self.metaFrame,textvariable=self.metaFileVar,wraplength=int(0.9*(self.metaFrame.winfo_width())) )
+            self.metaFileLabel.grid( row=3,column=0,sticky='n' )
 
     def setDescFrame( self, ):
         self.descFrame = tk.Frame( root,bg='#FDC47D',borderwidth=15,relief='ridge' )
@@ -338,6 +358,10 @@ class GUI(tk.Frame):
     def setSaveDir(self):
         self.saveDir = filedialog.askdirectory( initialdir='/',title='Select Save Directory' )
         self.saveDirVar.set( self.saveDir )
+
+    def setMetaFile(self):
+        self.metaFile = filedialog.askopenfilename( filetypes=( ('csv files','*.csv'),('excel files','*.xls'),('all files','*.*') ), initialdir='/', title='Select Meta File')
+        self.metaFileVar.set( self.metaFile )
 
     # sorts images by time and constructs a dataframe to hold them
     def sortimages( self,filenames ):
