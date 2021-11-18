@@ -375,12 +375,12 @@ class GUI(tk.Frame):
             hour = int( int( imname[23:27] ) / 100 )
             imagemat.append( [imname,i,cameraID,year,month,day,hour] )
 
-        self.imageDF = pd.DataFrame( imagemat,columns=['name','filename','cameraID','year','month','day','hour',] )
+        self.imageDF = pd.DataFrame( imagemat,columns=['Image Name','File Location','cameraID','year','month','day','hour',] )
         self.imageDF = self.imageDF.sort_values( by=['cameraID','year','month','day','hour'] )
         self.imageDF['index_num'] = np.arange( len(self.imageDF) )
         self.imageDF = self.imageDF.reset_index(drop=True)
         #print( 'self.imageDF :',self.imageDF)
-        imagelst = self.imageDF['filename']
+        imagelst = self.imageDF['File Location']
         return imagelst
 
     # Formats the original dataframe based off of the images selected
@@ -434,6 +434,36 @@ class GUI(tk.Frame):
         self.imageDF[ 'HoursElapsed' ] = hours_elapsed
         self.imageDF[ 'ResizeRatio' ] = 0
 
+    def readMetaFile( self, ):
+        mFile = pd.read_excel(self.metaFileVar,engine='openpyxl')
+
+        # These are all of the columns in the meta file
+        self.imageDF[ 'Array #' ] = ''
+        self.imageDF[ 'Leaf #' ] = ''
+        self.imageDF[ 'Leaf Section #' ] = ''
+        self.imageDF[ 'Covariable 1' ] = ''
+        self.imageDF[ 'Covariable 2' ] = ''
+        self.imageDF[ 'Covariable 3' ] = ''
+        self.imageDF[ 'Covariable 4' ] = ''
+        self.imageDF[ 'Vector Name' ] = ''
+        self.imageDF[ 'Gene of Interest' ] = ''
+        self.imageDF[ 'Comments' ] = ''
+
+        for df_index,df_row in self.imageDF.iterrows():
+            camera_num = self.imageDF.at[df_row,'CameraID']
+            mFile_row = mFile.loc[mFile['Camera #'] == camera_num]
+
+            self.imageDF.at[df_row,'Array #'] = mFile_row.at[0,'Array #'] 
+            self.imageDF.at[df_row,'Leaf Section #' ] = mFile_row.at[0,'Leaf Section #']
+            self.imageDF.at[df_row,'Covariable 1' ] = mFile_row.at[0,'Covariable 1']
+            self.imageDF.at[df_row,'Covariable 2' ] = mFile_row.at[0,'Covariable 2']
+            self.imageDF.at[df_row,'Covariable 3' ] = mFile_row.at[0,'Covariable 3']
+            self.imageDF.at[df_row,'Covariable 4' ] = mFile_row.at[0,'Covariable 4']
+            self.imageDF.at[df_row,'Vector Name' ] = mFile_row.at[0,'Vector Name']
+            self.imageDF.at[df_row,'Gene of Interest' ] = mFile_row.at[0,'Gene of Interest']
+            self.imageDF.at[df_row,'Comments' ] = mFile_row.at[0,'Comments']
+
+
     #TODO maybe this can be moved to the postProcessing.py file
     # draw rectangles around the lesions
     def drawRecsAndSaveImg( self,contours_reordered,im_to_write,imgsWLesions_dir,df_index ):
@@ -444,8 +474,11 @@ class GUI(tk.Frame):
             color = (0,255,0)
             thickness = 2
             cv2.rectangle( im_to_write,start,end,color,thickness )
-        img_sav_pth = os.path.join( imgsWLesions_dir,self.imageDF.loc[df_index,'name'] )
+        img_sav_pth = os.path.join( imgsWLesions_dir,self.imageDF.loc[df_index,'Image Name'] )
         cv2.imwrite( img_sav_pth,im_to_write )
+
+    def addLesionNumberCol( self, ):
+        return
 
 
     #TODO Test what n does
@@ -508,6 +541,10 @@ class GUI(tk.Frame):
         
         self.formatDF()
 
+        print('self.metaFileVar :',self.metaFileVar)
+        if self.metaFileVar != '':
+            self.readMetaFile()
+
         #TODO maybe do all of the model-specific stuff here
         modelname = self.modelTypeVar.get()
         patch_size = 512
@@ -564,7 +601,7 @@ class GUI(tk.Frame):
             print( '\nCompleted {}/{} images'.format( df_index,len(self.imageDF) ) )
 
             #test_img_pth = imagelst[0] # full path and  name of the image, but starts with a '/'
-            test_img_pth = df_row[ 'filename' ]
+            test_img_pth = df_row[ 'File Location' ]
             filename = test_img_pth.split('/')[-1] # name of the image
             print( 'Processing image :',filename )
             slidename = filename[:-4] # slidename is just the name of the image w/o extension
@@ -576,7 +613,6 @@ class GUI(tk.Frame):
             # image_fg_size is the size of the side of the square containing the entire unresized leaf
             # save this number for later use when to determine the actual size of all of the lesions later
             resized_image, normalized_image, leaf_mask, resize_ratio = process_tif(test_img_pth,patch_size,mean=IMG_MEAN )
-            print('resize_ratio :',resize_ratio)
             cv2.imwrite(slidename+'resized.png',resized_image)
 #            normalized_image = cv2.cvtColor(normalized_image,cv2.COLOR_BGR2RGB)
             #rint('GUI - resized_image.shape :',resized_image.shape)
@@ -780,11 +816,46 @@ class GUI(tk.Frame):
             for i in range(self.num_lesions-1):
                 reformatted_csv_df = reformatted_csv_df.append(csv_df)
             reformatted_csv_df = reformatted_csv_df.reset_index(drop=True)
-            reformatted_csv_df['Lesion Area Column'] = ''
+            reformatted_csv_df['Lesion Area Pixels'] = ''
+            reformatted_csv_df['Lesion #'] = ''
             for i in range(self.num_lesions):
                 individual_lesion_area = csv_df.at[0,'l'+str(i+1)+'_area']
                 #print('individual_lesion_area :',individual_lesion_area)
-                reformatted_csv_df.at[int(i),'Lesion Area Column'] = individual_lesion_area
+                reformatted_csv_df.at[int(i),'Lesion Area Pixels'] = individual_lesion_area
+                reformatted_csv_df.at[int(i),'lesion #'] = int(i+1)
+            reformatted_csv_df['Adjusted Lesion Area Pixels'] = reformatted_csv_df['Lesion Area Pixels'] * reformatted_csv_df['resize_ratio']
+
+            reformatted_csv_df = reformatted_csv_df[[
+                    'Image Name',
+                    'File Location',
+                    'CameraID',
+                    'Year',
+                    'Month',
+                    'Day',
+                    'Hour',
+                    'Innoc Year',
+                    'Innoc Month',
+                    'Innoc Day',
+                    'Innoc Hour',
+                    'Hours Elapsed',
+                    'Lesion #', # TODO Add Lesion # Column
+                    'Lesion Area Pixels',
+                    'ResizeRatio',
+                    'Adjusted Lesion Pixels',
+                    'Camera #',
+                    'Array #',
+                    'Leaf #',
+                    'Leaf Section #',
+                    'Covariable 1',
+                    'Covariable 2',
+                    'Covariable 3',
+                    'Covariable 4',
+                    'Vector Name',
+                    'Gene of Interest',
+                    'Comments',
+                    'Description']]
+
+
 
 
             #postprocess_files = glob.glob(postprocess_slide_dir+'/*')
