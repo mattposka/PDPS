@@ -203,7 +203,7 @@ class GUI(tk.Frame):
             self.selectmetafile = tk.Button( self.metaFrame,text='Select Experimental Design File',command=self.setMetaFile )
             self.selectmetafile.grid( row=0,column=0,sticky='' )
 
-            self.saveMetaLabel = tk.Label( self.metaFrame,text='Meta File:' )
+            self.saveMetaLabel = tk.Label( self.metaFrame,text='Experimental Design File:' )
             self.saveMetaLabel.grid( row=1,column=0,sticky='s' )
 
             self.metaFrame.update()
