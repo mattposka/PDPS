@@ -120,7 +120,7 @@ class GUI(tk.Frame):
         self.modelFrame = tk.Frame( root,bg='#D85B63',borderwidth=15,relief='ridge' )
 
         self.modelTypeVar = tk.StringVar( self.modelFrame )
-        self.modelTypeVar.set( 'green.pth' )
+        self.modelTypeVar.set( 'LEAF_UNET_DICE_NOV21.pth' )
         models_available_list = self.getModelsAvailable()
         self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelTypeVar,*models_available_list )
         self.modelTypeMenu.grid( row=1,column=0 )
@@ -437,7 +437,6 @@ class GUI(tk.Frame):
 
     def readMetaFile( self, ):
         mFile_name = str(self.metaFile)
-        print('mFile_name :',mFile_name)
         mFile = pd.read_excel(mFile_name,engine='openpyxl')
 
 
@@ -549,7 +548,7 @@ class GUI(tk.Frame):
         
         self.formatDF()
 
-        print('self.metaFileVar :',self.metaFileVar)
+        print('self.metaFile :',self.metaFile)
         if self.metaFileVar != '':
             self.readMetaFile()
 
@@ -621,7 +620,8 @@ class GUI(tk.Frame):
             # image_fg_size is the size of the side of the square containing the entire unresized leaf
             # save this number for later use when to determine the actual size of all of the lesions later
             resized_image, normalized_image, leaf_mask, resize_ratio = process_tif(test_img_pth,patch_size,mean=IMG_MEAN )
-            cv2.imwrite(slidename+'resized.png',resized_image)
+            #print('slidename + resized.png:',slidename)
+            #cv2.imwrite(slidename+'resized.png',resized_image)
 #            normalized_image = cv2.cvtColor(normalized_image,cv2.COLOR_BGR2RGB)
             #rint('GUI - resized_image.shape :',resized_image.shape)
             #print('GUI - resized_image.max :',np.max(resized_image))
