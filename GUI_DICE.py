@@ -200,7 +200,7 @@ class GUI(tk.Frame):
             self.metaFrame.grid_columnconfigure( 0,weight=1 )
             self.metaFrame.grid( row=1,column=2,sticky='nsew' )
 
-            self.selectmetafile = tk.Button( self.metaFrame,text='Select Meta File',command=self.setMetaFile )
+            self.selectmetafile = tk.Button( self.metaFrame,text='Select Experimental Design File',command=self.setMetaFile )
             self.selectmetafile.grid( row=0,column=0,sticky='' )
 
             self.saveMetaLabel = tk.Label( self.metaFrame,text='Meta File:' )
@@ -360,7 +360,7 @@ class GUI(tk.Frame):
         self.saveDirVar.set( self.saveDir )
 
     def setMetaFile(self):
-        self.metaFile = filedialog.askopenfilename( filetypes=( ('csv files','*.csv'),('excel files','*.xls'),('all files','*.*') ), initialdir='/', title='Select Meta File')
+        self.metaFile = filedialog.askopenfilename( filetypes=( ('excel files','*.xlsx'),('csv files','*.csv'),('all files','*.*') ), initialdir='/', title='Select Experimental Design File')
         self.metaFileVar.set( self.metaFile )
 
     # sorts images by time and constructs a dataframe to hold them
@@ -375,8 +375,9 @@ class GUI(tk.Frame):
             hour = int( int( imname[23:27] ) / 100 )
             imagemat.append( [imname,i,cameraID,year,month,day,hour] )
 
-        self.imageDF = pd.DataFrame( imagemat,columns=['Image Name','File Location','cameraID','year','month','day','hour',] )
-        self.imageDF = self.imageDF.sort_values( by=['cameraID','year','month','day','hour'] )
+        self.imageDF = pd.DataFrame( imagemat,columns=['Image Name','File Location','CameraID','Year','Month','Day','Hour',] )
+        self.imageDF['Camera #'] = self.imageDF['CameraID']
+        self.imageDF = self.imageDF.sort_values( by=['CameraID','Year','Month','Day','Hour'] )
         self.imageDF['index_num'] = np.arange( len(self.imageDF) )
         self.imageDF = self.imageDF.reset_index(drop=True)
         #print( 'self.imageDF :',self.imageDF)
@@ -403,22 +404,22 @@ class GUI(tk.Frame):
             self.imageDF[ endX_str ] = ''
             self.imageDF[ endY_str ] = ''
         description = self.e1.get('1.0', END)
-        self.imageDF['description'] = description
+        self.imageDF['Description'] = description
 
         innoc_year = int( self.innocYearTimeVar.get() )
         innoc_month = int( self.innocMonthTimeVar.get() )
         innoc_day = int( self.innocDayTimeVar.get() )
         innoc_hour = int( self.innocHourTimeVar.get() )
         if innoc_year==2000 and innoc_month==2 and innoc_day==2 and innoc_hour==2:
-            innoc_year = self.imageDF.loc[0,'year']
-            innoc_month = self.imageDF.loc[0,'month']
-            innoc_day = self.imageDF.loc[0,'day']
-            innoc_hour = self.imageDF.loc[0,'hour']
+            innoc_year = self.imageDF.loc[0,'Year']
+            innoc_month = self.imageDF.loc[0,'Month']
+            innoc_day = self.imageDF.loc[0,'Day']
+            innoc_hour = self.imageDF.loc[0,'Hour']
 
-        self.imageDF[ 'InnoculationYear' ] = innoc_year
-        self.imageDF[ 'InnoculationMonth' ] = innoc_month
-        self.imageDF[ 'InnoculationDay' ] = innoc_day
-        self.imageDF[ 'InnoculationHour' ] = innoc_hour
+        self.imageDF[ 'Innoc Year' ] = innoc_year
+        self.imageDF[ 'Innoc Month' ] = innoc_month
+        self.imageDF[ 'Innoc Day' ] = innoc_day
+        self.imageDF[ 'Innoc Hour' ] = innoc_hour
         hours_elapsed = []
         start_datetime = dt.datetime( innoc_year,
                         innoc_month,
@@ -426,16 +427,19 @@ class GUI(tk.Frame):
                         innoc_hour
                         ) 
         for df_index,df_row in self.imageDF.iterrows():
-            end_datetime = dt.datetime( df_row['year'],df_row['month'],df_row['day'],df_row['hour'] ) 
+            end_datetime = dt.datetime( df_row['Year'],df_row['Month'],df_row['Day'],df_row['Hour'] )
             time_diff = end_datetime - start_datetime
             secs_diff = time_diff.total_seconds()
             hours_diff = np.divide( secs_diff,3600 )
             hours_elapsed.append( int( hours_diff ) )
-        self.imageDF[ 'HoursElapsed' ] = hours_elapsed
+        self.imageDF[ 'Hours Elapsed' ] = hours_elapsed
         self.imageDF[ 'ResizeRatio' ] = 0
 
     def readMetaFile( self, ):
-        mFile = pd.read_excel(self.metaFileVar,engine='openpyxl')
+        mFile_name = str(self.metaFile)
+        print('mFile_name :',mFile_name)
+        mFile = pd.read_excel(mFile_name,engine='openpyxl')
+
 
         # These are all of the columns in the meta file
         self.imageDF[ 'Array #' ] = ''
@@ -449,19 +453,23 @@ class GUI(tk.Frame):
         self.imageDF[ 'Gene of Interest' ] = ''
         self.imageDF[ 'Comments' ] = ''
 
-        for df_index,df_row in self.imageDF.iterrows():
+        for tuple in self.imageDF.itertuples():
+            df_row = tuple[0]
             camera_num = self.imageDF.at[df_row,'CameraID']
             mFile_row = mFile.loc[mFile['Camera #'] == camera_num]
+            mFile_row_ri = mFile_row.reset_index(drop=True)
 
-            self.imageDF.at[df_row,'Array #'] = mFile_row.at[0,'Array #'] 
-            self.imageDF.at[df_row,'Leaf Section #' ] = mFile_row.at[0,'Leaf Section #']
-            self.imageDF.at[df_row,'Covariable 1' ] = mFile_row.at[0,'Covariable 1']
-            self.imageDF.at[df_row,'Covariable 2' ] = mFile_row.at[0,'Covariable 2']
-            self.imageDF.at[df_row,'Covariable 3' ] = mFile_row.at[0,'Covariable 3']
-            self.imageDF.at[df_row,'Covariable 4' ] = mFile_row.at[0,'Covariable 4']
-            self.imageDF.at[df_row,'Vector Name' ] = mFile_row.at[0,'Vector Name']
-            self.imageDF.at[df_row,'Gene of Interest' ] = mFile_row.at[0,'Gene of Interest']
-            self.imageDF.at[df_row,'Comments' ] = mFile_row.at[0,'Comments']
+            a = mFile_row_ri.at[0,'Array #']
+            self.imageDF.at[df_row,'Array #'] = mFile_row_ri.at[0,'Array #']
+            self.imageDF.at[df_row, 'Leaf #'] = mFile_row_ri.at[0, 'Leaf #']
+            self.imageDF.at[df_row,'Leaf Section #' ] = mFile_row_ri.at[0,'Leaf Section #']
+            self.imageDF.at[df_row,'Covariable 1' ] = mFile_row_ri.at[0,'Covariable 1']
+            self.imageDF.at[df_row,'Covariable 2' ] = mFile_row_ri.at[0,'Covariable 2']
+            self.imageDF.at[df_row,'Covariable 3' ] = mFile_row_ri.at[0,'Covariable 3']
+            self.imageDF.at[df_row,'Covariable 4' ] = mFile_row_ri.at[0,'Covariable 4']
+            self.imageDF.at[df_row,'Vector Name' ] = mFile_row_ri.at[0,'Vector Name']
+            self.imageDF.at[df_row,'Gene of Interest' ] = mFile_row_ri.at[0,'Gene of Interest']
+            self.imageDF.at[df_row,'Comments' ] = mFile_row_ri.at[0,'Comments']
 
 
     #TODO maybe this can be moved to the postProcessing.py file
@@ -631,7 +639,7 @@ class GUI(tk.Frame):
             #print('HERE 001')
             #TODO add this back in once its tested and accounted for
             # TODO it is adding the previous segmentations as an extra channel
-            #if self.goodSeg == True and self.imageDF.loc[df_index-1,'cameraID'] == self.imageDF.loc[df_index,'cameraID']:
+            #if self.goodSeg == True and self.imageDF.loc[df_index-1,'CameraID'] == self.imageDF.loc[df_index,'CameraID']:
             #    input_image[:,:,3] = self.prevSegmentation
             #print('HERE 002')
 
@@ -822,9 +830,10 @@ class GUI(tk.Frame):
                 individual_lesion_area = csv_df.at[0,'l'+str(i+1)+'_area']
                 #print('individual_lesion_area :',individual_lesion_area)
                 reformatted_csv_df.at[int(i),'Lesion Area Pixels'] = individual_lesion_area
-                reformatted_csv_df.at[int(i),'lesion #'] = int(i+1)
-            reformatted_csv_df['Adjusted Lesion Area Pixels'] = reformatted_csv_df['Lesion Area Pixels'] * reformatted_csv_df['resize_ratio']
+                reformatted_csv_df.at[int(i),'Lesion #'] = int(i+1)
+            reformatted_csv_df['Adjusted Lesion Pixels'] = reformatted_csv_df['Lesion Area Pixels'] * reformatted_csv_df['ResizeRatio']
 
+            # TODO Add Lesion # Column
             reformatted_csv_df = reformatted_csv_df[[
                     'Image Name',
                     'File Location',
@@ -838,7 +847,7 @@ class GUI(tk.Frame):
                     'Innoc Day',
                     'Innoc Hour',
                     'Hours Elapsed',
-                    'Lesion #', # TODO Add Lesion # Column
+                    'Lesion #',
                     'Lesion Area Pixels',
                     'ResizeRatio',
                     'Adjusted Lesion Pixels',

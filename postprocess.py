@@ -171,10 +171,10 @@ def sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index,num_lesions ):
 # TODO probably need to fix this
 def checkLesionOrder( imageDF,df_index,contours_ordered,num_lesions ):
     prev_img_df = imageDF[ 
-                    (imageDF['cameraID']==imageDF.loc[df_index,'cameraID']) &
-                    (imageDF['year']==imageDF.loc[df_index,'year']) &
-                    (imageDF['month']==imageDF.loc[df_index,'month']) &
-                    (imageDF['day']==imageDF.loc[df_index,'day']) &
+                    (imageDF['CameraID']==imageDF.loc[df_index,'CameraID']) &
+                    (imageDF['Year']==imageDF.loc[df_index,'Year']) &
+                    (imageDF['Month']==imageDF.loc[df_index,'Month']) &
+                    (imageDF['Day']==imageDF.loc[df_index,'Day']) &
                     #(imageDF['index_num']<df_index) &
                     (imageDF['index_num'] < df_index)
                     #TODO maybe we still want to only compare against prev good imgs?
