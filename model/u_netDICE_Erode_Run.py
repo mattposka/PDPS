@@ -47,9 +47,9 @@ class _DecoderBlock(nn.Module):
         return self.decode(x)
 
 
-class UNetDICE_Erode(nn.Module):
+class UNetDICE_Erode_Run(nn.Module):
     def __init__(self, num_classes):
-        super(UNetDICE_Erode, self).__init__()
+        super(UNetDICE_Erode_Run, self).__init__()
         self.enc1 = _EncoderBlock(4, 96, ksize=3)
 
         self.enc2 = _EncoderBlock(96, 100, ksize=3 )

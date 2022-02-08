@@ -156,6 +156,7 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
 
     total_original_pixels = original_h*original_w
 
+    # Adding black bars to make the image square
     img_square = np.zeros( (max(h,w),max(h,w),c),dtype=img.dtype )
     diff = max(h,w)-min(h,w)
     start_idx = int(diff/2)
@@ -164,6 +165,7 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
     else:
         img_square[start_idx:start_idx+h,:,:] = img
     img = img_square
+
     #print('img.shape :',img.shape )
     #print('np.max(img) :',np.max(img) )
 
@@ -220,6 +222,7 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
 ###################################################################################################
     original_r,original_c = leaf_mask.shape
     r,c = leaf_mask.shape
+    # leaf mask should be the same shape as the input image
 
     left_cut = 0
     right_cut = 0

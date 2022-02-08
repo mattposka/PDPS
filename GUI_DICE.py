@@ -31,6 +31,7 @@ import model.u_netFull512 as u_netFull512
 import model.u_netFull512_Dilated as u_netFull512_Dilated
 import model.u_netCircle as u_netCircle
 import model.u_netDICE as u_netDICE
+import model.u_netDICE_Erode_Run as u_netDICE_Erode_Run
 
 import torch.nn as nn
 #from merge_npz_final import merge_npz
@@ -437,7 +438,9 @@ class GUI(tk.Frame):
 
     def readMetaFile( self, ):
         mFile_name = str(self.metaFile)
-        mFile = pd.read_excel(mFile_name,engine='openpyxl')
+        if mFile_name != '' and mFile_name != 'None':
+            mFile = pd.read_excel(mFile_name,engine='openpyxl')
+            mFile_Found = True
 
 
         # These are all of the columns in the meta file
@@ -452,23 +455,24 @@ class GUI(tk.Frame):
         self.imageDF[ 'Gene of Interest' ] = ''
         self.imageDF[ 'Comments' ] = ''
 
-        for tuple in self.imageDF.itertuples():
-            df_row = tuple[0]
-            camera_num = self.imageDF.at[df_row,'CameraID']
-            mFile_row = mFile.loc[mFile['Camera #'] == camera_num]
-            mFile_row_ri = mFile_row.reset_index(drop=True)
+        if mFile_Found == True:
+            for tuple in self.imageDF.itertuples():
+                df_row = tuple[0]
+                camera_num = self.imageDF.at[df_row,'CameraID']
+                mFile_row = mFile.loc[mFile['Camera #'] == camera_num]
+                mFile_row_ri = mFile_row.reset_index(drop=True)
 
-            a = mFile_row_ri.at[0,'Array #']
-            self.imageDF.at[df_row,'Array #'] = mFile_row_ri.at[0,'Array #']
-            self.imageDF.at[df_row, 'Leaf #'] = mFile_row_ri.at[0, 'Leaf #']
-            self.imageDF.at[df_row,'Leaf Section #' ] = mFile_row_ri.at[0,'Leaf Section #']
-            self.imageDF.at[df_row,'Covariable 1' ] = mFile_row_ri.at[0,'Covariable 1']
-            self.imageDF.at[df_row,'Covariable 2' ] = mFile_row_ri.at[0,'Covariable 2']
-            self.imageDF.at[df_row,'Covariable 3' ] = mFile_row_ri.at[0,'Covariable 3']
-            self.imageDF.at[df_row,'Covariable 4' ] = mFile_row_ri.at[0,'Covariable 4']
-            self.imageDF.at[df_row,'Vector Name' ] = mFile_row_ri.at[0,'Vector Name']
-            self.imageDF.at[df_row,'Gene of Interest' ] = mFile_row_ri.at[0,'Gene of Interest']
-            self.imageDF.at[df_row,'Comments' ] = mFile_row_ri.at[0,'Comments']
+                a = mFile_row_ri.at[0,'Array #']
+                self.imageDF.at[df_row,'Array #'] = mFile_row_ri.at[0,'Array #']
+                self.imageDF.at[df_row, 'Leaf #'] = mFile_row_ri.at[0, 'Leaf #']
+                self.imageDF.at[df_row,'Leaf Section #' ] = mFile_row_ri.at[0,'Leaf Section #']
+                self.imageDF.at[df_row,'Covariable 1' ] = mFile_row_ri.at[0,'Covariable 1']
+                self.imageDF.at[df_row,'Covariable 2' ] = mFile_row_ri.at[0,'Covariable 2']
+                self.imageDF.at[df_row,'Covariable 3' ] = mFile_row_ri.at[0,'Covariable 3']
+                self.imageDF.at[df_row,'Covariable 4' ] = mFile_row_ri.at[0,'Covariable 4']
+                self.imageDF.at[df_row,'Vector Name' ] = mFile_row_ri.at[0,'Vector Name']
+                self.imageDF.at[df_row,'Gene of Interest' ] = mFile_row_ri.at[0,'Gene of Interest']
+                self.imageDF.at[df_row,'Comments' ] = mFile_row_ri.at[0,'Comments']
 
 
     #TODO maybe this can be moved to the postProcessing.py file
@@ -549,8 +553,7 @@ class GUI(tk.Frame):
         self.formatDF()
 
         print('self.metaFile :',self.metaFile)
-        if self.metaFileVar != '':
-            self.readMetaFile()
+        self.readMetaFile()
 
         #TODO maybe do all of the model-specific stuff here
         modelname = self.modelTypeVar.get()
@@ -592,7 +595,7 @@ class GUI(tk.Frame):
         elif model_id == 'LEAF_UNET_DICE_NOV21.pth':
             model = u_netDICE.UNetDICE(NUM_CLASSES)
         else:
-            model = u_net.UNet(NUM_CLASSES)
+            model = u_netDICE_Erode_Run.UNetDICE_Erode_Run(NUM_CLASSES)
         model = nn.DataParallel(model)
         model.to(device)
         saved_state_dict = torch.load(RESTORE_FROM, map_location=lambda storage, loc: storage)
