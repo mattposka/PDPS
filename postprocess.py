@@ -4,6 +4,7 @@ import pandas as pd
 from merge_npz_finalFull import merge_npz
 from scipy.sparse import load_npz, save_npz, csr_matrix, coo_matrix
 from scipy.misc import imread, imsave
+import imageio as io
 import scipy.misc as spm
 from PIL import Image
 from utils.transforms import vl2im, im2vl
@@ -11,6 +12,16 @@ from skimage import filters
 from skimage.measure import label, regionprops
 from skimage.morphology import closing, square, remove_small_objects
 import cv2
+import os
+
+def saveOrigImg( postprocess_dir,slidename,resized_image ):
+    orig_img_pth = os.path.join(postprocess_dir, slidename + '_Original.png')
+    cv2.imwrite(orig_img_pth, resized_image)
+
+#def erodeSegMap( img ):
+#
+#    return img_erode
+
 
 # Not used right now
 # keeps the largest [num_lesions] lesions
@@ -64,37 +75,37 @@ def combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask,expand_ratio=0,ma
     for c in centers:
        cv2.circle( circle_img,(int(c[0]),int(c[1])),int(expand_ratio*c[2]),(255),-1 )
     #cir_img_pth = pred_img_pth.replace( '.png','_circles.png' )
-    #imsave( cir_img_pth,circle_img )
+    #io.imsave( cir_img_pth,circle_img )
 
     # labeled the new circle image
     labeled_circle = label(circle_img, connectivity=2)
     #lab_cir_pth = pred_img_pth.replace( '.png','_labeledCircles.png' )
-    #imsave( lab_cir_pth,labeled_circle )
+    #io.imsave( lab_cir_pth,labeled_circle )
 
     # applies the labels of the circle image to the original image,
     # theoretically grouping regions close to one-another together.
     labeled_circle[ labeled_img==0 ] = 0
     labeled_image = labeled_circle
     #lab_img_pth = pred_img_pth.replace( '.png','_labeledRegions.png' )
-    #imsave( lab_img_pth,labeled_image )
+    #io.imsave( lab_img_pth,labeled_image )
 
     # remove small regions
     new_props = regionprops(labeled_image)
     labeled_img = regionAreaFilter( new_props,labeled_image )
     #lab_img_pth = pred_img_pth.replace( '.png','_RegionAreaFilter.png' )
-    #imsave( lab_img_pth,labeled_image )
+    #io.imsave( lab_img_pth,labeled_image )
 
     # remove non-circle region
     new_props = regionprops(labeled_image)
     labeled_img = circleFilter( new_props,labeled_image,ref_ecc=ref_ecc )
     #lab_img_pth = pred_img_pth.replace( '.png','_NonCircleFilter.png' )
-    #imsave( lab_img_pth,labeled_image )
+    #io.imsave( lab_img_pth,labeled_image )
 
     #TODO test leaf_mask filter again later
     #new_props = regionprops(labeled_image)
     #labeled_img = leafMaskFilter( new_props,labeled_image,leaf_mask )
     #lab_img_pth = pred_img_pth.replace( '.png','_LeafMaskFilter.png' )
-    #imsave( lab_img_pth,labeled_image )
+    #io.imsave( lab_img_pth,labeled_image )
 
     return labeled_img
 
@@ -147,7 +158,7 @@ def drawCircles( labeled_img,postProcessed_img_pth ):
     for c in centers:
        cv2.circle( new_labeled_img_3d,(int(c[0]),int(c[1])),int(0.7*c[2]),(0,255,0),2 )
     #circleimgpath = postProcessed_img_pth.replace( '.png','_circleFill.png' )
-    #imsave( circleimgpath,new_labeled_img_3d )
+    #io.imsave( circleimgpath,new_labeled_img_3d )
 
     new_img = cv2.cvtColor( new_labeled_img_3d,cv2.COLOR_BGR2GRAY )
     new_img[ new_img != 0 ] = 1
@@ -183,6 +194,7 @@ def checkLesionOrder( imageDF,df_index,contours_ordered,num_lesions ):
                     ]
     # Here contours_ordered will be:
     # [ w*h,x,y,x+w,y+h,cx,cy,area ]
+    new_leaf = False
     if len(prev_img_df) > 0:
         prev_img_df = prev_img_df.reset_index(drop=True)
         pd.set_option('display.max_columns', None)
@@ -212,10 +224,15 @@ def checkLesionOrder( imageDF,df_index,contours_ordered,num_lesions ):
                         found = True
     else:
         contours_reordered = contours_ordered
-    return contours_reordered
+        new_leaf = True
+    return contours_reordered, new_leaf
 
 # Adds reordered contours to the DF
-def addContoursToDF( imageDF,contours_reordered,df_index,num_lesions ):
+# lesion_size and other information about the lesions
+# Calculates average lesion size and adds to the DF
+def addContoursToDF( imageDF,contours_reordered,df_index,num_lesions,pla ):
+    lesion_total = 0
+    lesion_count = 0
     for l in range( num_lesions ):
         if l < len(contours_reordered):
             area_str = 'l'+str(l+1)+'_area'
@@ -236,6 +253,18 @@ def addContoursToDF( imageDF,contours_reordered,df_index,num_lesions ):
             imageDF.at[ df_index,'l'+str(l+1)+'_ystart' ] = 0
             imageDF.at[ df_index,'l'+str(l+1)+'_yend' ] = 0
 
+        lesion_size = contours_reordered[l,7]
+        if lesion_size != 0:
+            if pla > 0:
+                if lesion_size < pla*1.5 and lesion_size > pla*0.5:
+                    lesion_total += lesion_size
+                    lesion_count += 1
+            else:
+                lesion_total += lesion_size
+                lesion_count += 1
+    lesion_avg = lesion_total / lesion_count
+    imageDF.at[ df_index,'Avg Adj Pixel Size' ] = lesion_avg
+
     #slf_size = 1000
     #slf = contours_reordered[:num_lesions,7]
     #too_small = False
@@ -243,7 +272,7 @@ def addContoursToDF( imageDF,contours_reordered,df_index,num_lesions ):
     #    if i < 1000:
     #        too_small = True
 
-    return imageDF
+    return imageDF, lesion_avg
 
 # check if segmentation was good
 def checkSegQuality( contours_reordered ):

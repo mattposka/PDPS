@@ -38,6 +38,7 @@ import torch.nn as nn
 from merge_npz_finalFull import merge_npz
 from scipy.sparse import load_npz, save_npz, csr_matrix, coo_matrix
 from scipy.misc import imread, imsave
+import imageio as io
 import scipy.misc as spm
 from PIL import Image
 from utils.transforms import vl2im, im2vl
@@ -405,7 +406,9 @@ class GUI(tk.Frame):
             self.imageDF[ endX_str ] = ''
             self.imageDF[ endY_str ] = ''
         description = self.e1.get('1.0', END)
+        self.imageDF['Avg Adj Pixel Size'] = ''
         self.imageDF['Description'] = description
+
 
         innoc_year = int( self.innocYearTimeVar.get() )
         innoc_month = int( self.innocMonthTimeVar.get() )
@@ -558,17 +561,9 @@ class GUI(tk.Frame):
         #TODO maybe do all of the model-specific stuff here
         modelname = self.modelTypeVar.get()
         patch_size = 512
-        if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_dilated_Jun21.pth':
-            patch_size = 572
-        if model_id == 'LEAF_UNET_FULL256_Jun21.pth' or model_id == 'LEAF_UNET_FULL256_July21.pth':
-            patch_size = 256
-        #if model_id == 'LEAF_UNET_FULL512_Jun21.pth' or model_id == 'LEAF_UNET_FULL512_July21.pth':
-        if '512' in model_id:
-            patch_size = 512
 
         #IMG_MEAN = np.array((62.17962105572224, 100.62603236734867, 131.60830906033516), dtype=np.float32)
         IMG_MEAN = np.array((128.95671, 109.307915, 96.25992), dtype=np.float32) # R G B
-
 
         file_started = False
         self.goodSeg = False
@@ -580,22 +575,10 @@ class GUI(tk.Frame):
 
         #TODO make this cleaner later, but for now just load different model if it has the specific name
         NUM_CLASSES = 2
-        if model_id == 'LEAF_UNET_Jun21.pth' or model_id == 'LEAF_UNET_FULL_Jun21.pth' or model_id=='LEAF_UNET_FULL512_Jun21.pth' or model_id=='LEAF_UNET_FULL256_Jun21.pth' or model_id=='LEAF_UNET_FULL256_July21.pth':
-            model = u_net572.UNet(NUM_CLASSES)
-        elif model_id == 'LEAF_UNET_dilated_Jun21.pth':
-            model = u_net572_dilated.UNet(NUM_CLASSES)
-        elif model_id == 'LEAF_UNET_512_DeepSup_Jun21.pth':
-            model = u_net2.UNet2(NUM_CLASSES)
-        elif model_id == 'LEAF_UNET_FULL512_July21.pth':
-            model = u_netFull512.UNet(NUM_CLASSES)
-        elif model_id == 'LEAF_UNET_FULL512_Dilated_Aug21.pth':
-            model = u_netFull512_Dilated.UNetFull512_Dilated(NUM_CLASSES)
-        elif model_id == 'LEAF_UNET_CIRCLE_SEP21.pth':
-            model = u_netCircle.UNetCircle(NUM_CLASSES)
-        elif model_id == 'LEAF_UNET_DICE_NOV21.pth':
+        model = u_netDICE_Erode_Run.UNetDICE_Erode_Run(NUM_CLASSES)
+        if model_id == 'LEAF_UNET_DICE_NOV21.pth':
             model = u_netDICE.UNetDICE(NUM_CLASSES)
-        else:
-            model = u_netDICE_Erode_Run.UNetDICE_Erode_Run(NUM_CLASSES)
+
         model = nn.DataParallel(model)
         model.to(device)
         saved_state_dict = torch.load(RESTORE_FROM, map_location=lambda storage, loc: storage)
@@ -606,7 +589,7 @@ class GUI(tk.Frame):
         model.load_state_dict(saved_state_dict['state_dict'])
         model.eval()
 
-
+        pla = 0
         for df_index,df_row in self.imageDF.iterrows(): 
             print( '\nCompleted {}/{} images'.format( df_index,len(self.imageDF) ) )
 
@@ -647,20 +630,15 @@ class GUI(tk.Frame):
             #print('HERE 002')
 
             preprocess_start_time = time.time()
-
-
             batch_time = AverageMeter()
             with torch.no_grad():
                 end = time.time()
                     
                 formatted_img = np.transpose(input_image,(2,0,1)) # transpose because channels first
-                #print('HERE 003')
 
                 formatted_img = formatted_img.astype(np.float32)
                 image_tensor = torch.from_numpy(np.expand_dims(formatted_img,axis=0))
-                #print('HERE 004')
                 output = model(image_tensor).to(device)
-                #print('HERE 005')
                 #Softmax = torch.nn.Softmax2d()
                 #print('before pred here')
                 #pred = torch.max(Softmax(output), dim=1, keepdim=True)
@@ -687,12 +665,7 @@ class GUI(tk.Frame):
             
             slide_map_name_png = slidename + '_OSeg.png'
 
-
-            #TODO save original image here
-            orig_img_pth = os.path.join( postprocess_dir,slidename+'_Original.png' )
-            cv2.imwrite( orig_img_pth,resized_image )
-            ##################################################################################################
-
+            pp.saveOrigImg( postprocess_dir,slidename,resized_image)
 
             pred_img_pth = os.path.join( postprocess_dir,slide_map_name_png )
             #img = spm.imread(pred_img_pth)
@@ -714,9 +687,9 @@ class GUI(tk.Frame):
             #new_img =  pp.drawCircles( labeled_img,postProcessed_img_pth )
             new_img = labeled_img
 
-
             # is this needed?
             #TODO check this
+            new_img = np.where(new_img > 0, 1, 0)
             new_img = vl2im(new_img)
             ################################################################################################
             
@@ -731,8 +704,7 @@ class GUI(tk.Frame):
             #TODO check the save path here:
             # this should be the image after it is grouped into regions,
             # circleFiltered,sizeFiltered,and circleFilled
-            imsave(postProcessed_img_pth, new_img)
-
+            io.imsave(postProcessed_img_pth, new_img)
 
             #resized_image, leaf_mask = process_tif(test_img_pth, log, patch_size )
 
@@ -795,11 +767,13 @@ class GUI(tk.Frame):
             contours_ordered = pp.sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index,self.num_lesions )
             #print('contours_ordered :',contours_ordered)
             # check if lesions are in the same order
-            contours_reordered = pp.checkLesionOrder( self.imageDF,df_index,contours_ordered,self.num_lesions )
+            contours_reordered, new_leaf = pp.checkLesionOrder( self.imageDF,df_index,contours_ordered,self.num_lesions )
             #print('contours_reordered :',contours_reordered)
 
             # add reordered contours to the DF
-            self.imageDF = pp.addContoursToDF( self.imageDF,contours_reordered,df_index,self.num_lesions )
+            if new_leaf == True:
+                pla = 0
+            self.imageDF,pla = pp.addContoursToDF( self.imageDF,contours_reordered,df_index,self.num_lesions,pla )
 
 
             # check if segmentation was good
@@ -854,6 +828,7 @@ class GUI(tk.Frame):
                     'Lesion Area Pixels',
                     'ResizeRatio',
                     'Adjusted Lesion Pixels',
+                    'Avg Adj Pixel Size',
                     'Camera #',
                     'Array #',
                     'Leaf #',
