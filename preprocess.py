@@ -306,12 +306,54 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
         #print('np.max(normalized_img) :',np.max(normalized_img) )
 #    normalized_img = img - mean
 #    normalized_img = normalized_img / mean
-###################################################################################################
+##################################################################################################
 ###################################################################################################
     resize_ratio = total_reshaped_pixels/(512*512)
     #resize_ratio = max(original_h,original_w)*max(original_h,original_w)/large_side*large_side
 
     stop = time()
     #print('\tPreprocessing time : ' + str(stop - start))
+
+    return resized_img,normalized_img,leaf_mask,resize_ratio,center_h,center_w,half_side
+
+def quick_process_tif(file, patch_size, leaf_mask,center_h,center_w,half_side):
+    filename = file.split('/')[-1]
+    img = cv2.imread(file)
+    h,w,c = img.shape
+
+    # Adding black bars to make the image square
+    img_square = np.zeros( (max(h,w),max(h,w),c),dtype=img.dtype )
+    diff = max(h,w)-min(h,w)
+    start_idx = int(diff/2)
+    if h==max(h,w):
+        img_square[:,start_idx:start_idx+w,:] = img
+    else:
+        img_square[start_idx:start_idx+h,:,:] = img
+    img = img_square
+
+    img = img[center_h-half_side:center_h+half_side,center_w-half_side:center_w+half_side,:]
+
+    total_reshaped_pixels = 4*half_side*half_side
+
+    #leaf_mask = leaf_mask[center_h-half_side:center_h+half_side,center_w-half_side:center_w+half_side]
+    np.save('leaf_mask.npy',leaf_mask)
+
+    #r,c = leaf_mask.shape
+    #for i in range(c):
+    #    for j in range(r):
+    #        if leaf_mask[i,j] == False:
+    #            img[i,j,:] = 0
+    for i in range(3):
+        img[:,:,i] = np.where(leaf_mask==True,img[:,:,i],0)
+
+    resized_img = cv2.resize(img,(512,512))
+    leaf_mask = np.array( leaf_mask,dtype=img.dtype )
+    leaf_mask_resized = cv2.resize(leaf_mask,(512,512))
+
+    normalized_img = np.array( resized_img, dtype='float64')
+    if np.max(img[:,:,:3]) > 1:
+        normalized_img[:,:,:3] = normalized_img[:,:,:3]/255.0
+
+    resize_ratio = total_reshaped_pixels/(512*512)
 
     return resized_img,normalized_img,leaf_mask,resize_ratio

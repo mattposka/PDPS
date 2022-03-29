@@ -18,19 +18,20 @@ def saveOrigImg( postprocess_dir,slidename,resized_image ):
     orig_img_pth = os.path.join(postprocess_dir, slidename + '_Original.png')
     cv2.imwrite(orig_img_pth, resized_image)
 
-def testSegMap( labels,num_lesions,pla ):
+def testSegMap( labels,num_lesions,pla,erodeNum ):
     good_lesions = 0
     if pla == 0:
         return True
     for i in range((np.max(labels))):
         label_region_size = np.sum( np.where(labels==(i+1),1,0) )
-        print('label_region_size :',label_region_size )
-        if label_region_size > 0.4*pla and label_region_size < 1.5*pla:
+    #    print('label_region_size :',label_region_size )
+        minSize = pla*pow(0.9,erodeNum) * 0.4
+        if label_region_size > minSize and label_region_size < 1.5*pla:
             good_lesions += 1
-    print('good_lesions :',good_lesions)
-    print('nl :',num_lesions)
+    #print('good_lesions :',good_lesions)
+    #print('nl :',num_lesions)
     if int(good_lesions) == int(num_lesions):
-        print('returning True')
+    #    print('returning True')
         return True
     else:
         return False
@@ -45,40 +46,62 @@ def erodeSegMap( img,num_lesions,pla,pred_img_pth ):
     # test starting with 1 dilation step
     dilation_steps = 1
     GoodErosionStepFound = False
-    for i in range(6):
-        if testSegMap( labels_erode,num_lesions,pla ):
-            print('TRUE')
+    for i in range(30):
+        if testSegMap( labels_erode,num_lesions,pla,erodeNum=i ):
+       #     print('TRUE')
             GoodErosionStepFound=True
             break
         else:
-            print('FALSE')
+       #     print('FALSE')
             labels_erode = np.where(labels_erode>0,1,0)
             labels_erode = np.array(labels_erode, dtype=np.uint8)
             labels_erode = cv2.erode( labels_erode,kernel )
             labels_erode = label(labels_erode)
             dilation_steps += 1
             labels_erode = np.array(labels_erode, dtype=np.uint8)
-            io.imsave(pred_img_pth.replace('.png','_erode7.png'),labels_erode)
+
+    img_eroded = vl2im(np.where(labels_erode>0,1,0))
+    io.imsave(pred_img_pth.replace('.png','_eroded.png'),img_eroded)
+
+    #if GoodErosionStepFound:
+    #    #print('dilation steps :',dilation_steps)
+    #    for j in range(dilation_steps):
+    #    #    print('step :',j)
+    #        labels_dilate = np.zeros( img.shape,np.uint8 )
+    #        for i in range(np.max(labels_erode)):
+    #            label_indv = np.where(labels_erode == (i + 1), 1, 0)
+    #            label_indv = np.array( label_indv,dtype=np.uint8 )
+    #            labels_dilate = labels_dilate + cv2.dilate( label_indv,kernel )
+    #        labels_dilate = np.where(labels_dilate>1,0,labels_dilate)
+    #        labels_dilate = label( labels_dilate )
+    #        labels_erode = labels_dilate
+
+    #        img_erode_red = vl2im(np.where(labels_erode > 0, 1, 0))
+    #        io.imsave(pred_img_pth.replace('.png', '_dilated{}.png'.format(j)), img_erode_red)
 
     if GoodErosionStepFound:
-        print('dilation steps :',dilation_steps)
-        for j in range(dilation_steps):
-            labels_dilate = np.zeros( img.shape,np.uint8 )
-            for i in range(np.max(labels_erode)):
-                label_indv = np.where(labels_erode == (i + 1), 1, 0)
-                label_indv = np.array( label_indv,dtype=np.uint8 )
-                labels_dilate = labels_dilate + cv2.dilate( label_indv,kernel )
-            labels_dilate = np.where(labels_dilate>1,0,labels_dilate)
-            labels_dilate = label( labels_dilate )
-            labels_erode = labels_dilate
+        ksize = 3+(2*dilation_steps)
+        dkernel = np.ones( (ksize,ksize),np.uint8 )
+        # print('dilation steps :',dilation_steps)
+        labels_dilate = np.zeros(img.shape, np.uint8)
+        for i in range(np.max(labels_erode)):
+            label_indv = np.where(labels_erode == (i + 1), 1, 0)
+            label_indv = np.array(label_indv, dtype=np.uint8)
+            labels_dilate = labels_dilate + cv2.dilate(label_indv, dkernel)
+        labels_dilate = np.where(labels_dilate > 1, 0, labels_dilate)
+        labels_dilate = label(labels_dilate)
+        labels_erode = labels_dilate
 
         labels_erode = np.where(img>0,labels_erode,0)
     else:
         labels_erode = img
 
+    labels_erode = np.where(labels_erode>0,1,0)
     labels_erode = label(labels_erode)
     labels_erode = np.array( labels_erode,dtype=np.uint8 )
-    io.imsave(pred_img_pth.replace('.png', '_erode.png'),labels_erode)
+    #io.imsave(pred_img_pth.replace('.png', '_dilate.png'),labels_erode)
+    img_dilated = vl2im(np.where(labels_erode>0,1,0))
+    io.imsave(pred_img_pth.replace('.png','_dilated.png'),img_dilated)
     return labels_erode
 
 
@@ -121,34 +144,35 @@ def fillHoles( img ):
 # This will try to combine regions that are very close to one another
 #TODO check expand_ratio - changed to zero to fix very long lesions
 def combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask,expand_ratio=0,mal=450 ):
-    circle_img = np.asarray( labeled_img,dtype=np.uint8 )
-    contours,heir = cv2.findContours( circle_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE )
+    #circle_img = np.asarray( labeled_img,dtype=np.uint8 )
+    #contours,heir = cv2.findContours( circle_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE )
 
-    centers = []
-    for c in contours:
-        (x,y),r = cv2.minEnclosingCircle( c ) 
-        if r > 5 and r < int(mal/2): # mal is maximum radius
-            centers.append( [x,y,r] )
+    #centers = []
+    #for c in contours:
+    #    (x,y),r = cv2.minEnclosingCircle( c )
+    #    if r > 5 and r < int(mal/2): # mal is maximum radius
+    #        centers.append( [x,y,r] )
 
-    # draws a circle over every segmented region that is slightly larger than the region
-    for c in centers:
-       cv2.circle( circle_img,(int(c[0]),int(c[1])),int(expand_ratio*c[2]),(255),-1 )
-    #cir_img_pth = pred_img_pth.replace( '.png','_circles.png' )
-    #io.imsave( cir_img_pth,circle_img )
+    ## draws a circle over every segmented region that is slightly larger than the region
+    #for c in centers:
+    #   cv2.circle( circle_img,(int(c[0]),int(c[1])),int(expand_ratio*c[2]),(255),-1 )
+    ##cir_img_pth = pred_img_pth.replace( '.png','_circles.png' )
+    ##io.imsave( cir_img_pth,circle_img )
 
-    # labeled the new circle image
-    labeled_circle = label(circle_img, connectivity=2)
-    #lab_cir_pth = pred_img_pth.replace( '.png','_labeledCircles.png' )
-    #io.imsave( lab_cir_pth,labeled_circle )
+    ## labeled the new circle image
+    #labeled_circle = label(circle_img, connectivity=2)
+    ##lab_cir_pth = pred_img_pth.replace( '.png','_labeledCircles.png' )
+    ##io.imsave( lab_cir_pth,labeled_circle )
 
-    # applies the labels of the circle image to the original image,
-    # theoretically grouping regions close to one-another together.
-    labeled_circle[ labeled_img==0 ] = 0
-    labeled_image = labeled_circle
-    #lab_img_pth = pred_img_pth.replace( '.png','_labeledRegions.png' )
-    #io.imsave( lab_img_pth,labeled_image )
+    ## applies the labels of the circle image to the original image,
+    ## theoretically grouping regions close to one-another together.
+    #labeled_circle[ labeled_img==0 ] = 0
+    #labeled_image = labeled_circle
+    ##lab_img_pth = pred_img_pth.replace( '.png','_labeledRegions.png' )
+    ##io.imsave( lab_img_pth,labeled_image )
 
-    # remove small regions
+    ## remove small regions
+    labeled_image = labeled_img
     new_props = regionprops(labeled_image)
     labeled_img = regionAreaFilter( new_props,labeled_image )
     #lab_img_pth = pred_img_pth.replace( '.png','_RegionAreaFilter.png' )
@@ -165,6 +189,7 @@ def combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask,expand_ratio=0,ma
     #labeled_img = leafMaskFilter( new_props,labeled_image,leaf_mask )
     #lab_img_pth = pred_img_pth.replace( '.png','_LeafMaskFilter.png' )
     #io.imsave( lab_img_pth,labeled_image )
+
 
     return labeled_img
 
@@ -230,7 +255,7 @@ def sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index,num_lesions ):
     # This is where the largest [num_lesions] lesions are kept
     # also sorts by y and x values
     #contour_arr = contour_arr[ contour_arr[:,7].argsort() ][-num_lesions:,:]
-    contour_arr = contour_arr[contour_arr[:, 7].argsort()][:-1,:] #remove the biggest region because it iskground
+    contour_arr = contour_arr[contour_arr[:, 7].argsort()][:-1,:] #remove the biggest region because it is background
     contour_arr = contour_arr[contour_arr[:,7].argsort()][-num_lesions:,:]
     contour_arr = contour_arr[ contour_arr[:,5].argsort() ]
     contour_arr = contour_arr[ contour_arr[:,6].argsort(kind='mergesort') ]
@@ -251,36 +276,47 @@ def checkLesionOrder( imageDF,df_index,contours_ordered,num_lesions ):
                     #(imageDF['index_num'].isin(good_df_indices))
                     #(imageDF['index_num'].isin(good_df_indices))
                     ]
+    #print('prev_img_df :',prev_img_df)
+    #print('contours_ordered :',contours_ordered)
     # Here contours_ordered will be:
     # [ w*h,x,y,x+w,y+h,cx,cy,area ]
     new_leaf = False
     if len(prev_img_df) > 0:
-        prev_img_df = prev_img_df.reset_index(drop=True)
-        pd.set_option('display.max_columns', None)
-        dfl = len( prev_img_df )
-        contours_reordered = np.zeros( shape=(num_lesions,8) )
-        lesion_number_taken = []
-        for i in range( num_lesions ):
-            xs = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xstart']
-            xe = prev_img_df.at[dfl-1,'l'+str(i+1)+'_xend']
-            ys = prev_img_df.at[dfl-1,'l'+str(i+1)+'_ystart']
-            ye = prev_img_df.at[dfl-1,'l'+str(i+1)+'_yend']
+        dfl = len(prev_img_df)
+        for dfi in range(dfl):
+            if ( prev_img_df.at[dfl-(dfi+1),'l1_area'] > 0 ) and \
+                ( prev_img_df.at[dfl-(dfi+1),'l2_area'] > 0 ) and \
+                ( prev_img_df.at[dfl-(dfi+1),'l3_area'] > 0 ) and \
+                ( prev_img_df.at[dfl-(dfi+1),'l4_area'] > 0 ):
 
-            found = False
-            if xs != 0 and xe != 0 and ys != 0 and ye != 0:
-                for j in range( len(contours_ordered) ):
-                    cx = contours_ordered[j,5]
-                    cy = contours_ordered[j,6]
-                    if cx > xs and cx < xe and cy > ys and cy < ye and found == False:
-                        contours_reordered[i,:] = contours_ordered[j,:]
-                        found = True
-                        lesion_number_taken.append(j)
-            else:
-                for j in range( len(contours_ordered) ):
-                    if j not in lesion_number_taken and found == False:
-                        contours_reordered[i,:] = contours_ordered[j,:]
-                        lesion_number_taken.append(j)
-                        found = True
+                prev_img_df = prev_img_df.reset_index(drop=True)
+                pd.set_option('display.max_columns', None)
+                dfl = len( prev_img_df )
+                contours_reordered = np.zeros( shape=(num_lesions,8) )
+                lesion_number_taken = []
+                for i in range( num_lesions ):
+                    xs = prev_img_df.at[dfl-(dfi+1),'l'+str(i+1)+'_xstart']
+                    xe = prev_img_df.at[dfl-(dfi+1),'l'+str(i+1)+'_xend']
+                    ys = prev_img_df.at[dfl-(dfi+1),'l'+str(i+1)+'_ystart']
+                    ye = prev_img_df.at[dfl-(dfi+1),'l'+str(i+1)+'_yend']
+                    #print('xs,xe,ys,ye :',xs,xe,ys,ye)
+
+                    found = False
+                    if xs != 0 and xe != 0 and ys != 0 and ye != 0:
+                        for j in range( len(contours_ordered) ):
+                            cx = contours_ordered[j,5]
+                            cy = contours_ordered[j,6]
+                            if cx > xs and cx < xe and cy > ys and cy < ye and found == False:
+                                contours_reordered[i,:] = contours_ordered[j,:]
+                                found = True
+                                lesion_number_taken.append(j)
+                    else:
+                        for j in range( len(contours_ordered) ):
+                            if j not in lesion_number_taken and found == False:
+                                contours_reordered[i,:] = contours_ordered[j,:]
+                                lesion_number_taken.append(j)
+                                found = True
+                break
     else:
         contours_reordered = contours_ordered
         new_leaf = True

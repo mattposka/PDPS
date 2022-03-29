@@ -10,7 +10,7 @@ import pandas as pd
 from openpyxl import load_workbook
 import os
 #from leaf_divide_testCircle import process_tif
-from preprocess import process_tif
+from preprocess import process_tif, quick_process_tif
 import numpy as np
 import time
 import torch
@@ -590,6 +590,10 @@ class GUI(tk.Frame):
         model.eval()
 
         pla = 0
+        leafMask = []
+        center_h = 0
+        center_w = 0
+        half_side = 0
         for df_index,df_row in self.imageDF.iterrows(): 
             print( '\nCompleted {}/{} images'.format( df_index,len(self.imageDF) ) )
 
@@ -605,7 +609,29 @@ class GUI(tk.Frame):
 
             # image_fg_size is the size of the side of the square containing the entire unresized leaf
             # save this number for later use when to determine the actual size of all of the lesions later
-            resized_image, normalized_image, leaf_mask, resize_ratio = process_tif(test_img_pth,patch_size,mean=IMG_MEAN )
+
+            newLeaf = True
+            prev_img_df = self.imageDF[
+                (self.imageDF['CameraID'] == self.imageDF.loc[df_index, 'CameraID']) &
+                (self.imageDF['Year'] == self.imageDF.loc[df_index, 'Year']) &
+                (self.imageDF['Month'] == self.imageDF.loc[df_index, 'Month']) &
+                (self.imageDF['Day'] == self.imageDF.loc[df_index, 'Day']) &
+                # (imageDF['index_num']<df_index) &
+                (self.imageDF['index_num'] < df_index)
+                # TODO maybe we still want to only compare against prev good imgs?
+                # (imageDF['index_num'].isin(good_df_indices))
+                # (imageDF['index_num'].isin(good_df_indices))
+                ]
+            if len(prev_img_df) > 0:
+                newLeaf = False
+
+            if newLeaf == True:
+                resized_image, normalized_image, leaf_mask, resize_ratio, center_h, center_w, half_side \
+                    = process_tif(test_img_pth,patch_size,mean=IMG_MEAN )
+                leafMask = leaf_mask
+            else:
+                resized_image, normalized_image, leaf_mask, resize_ratio, = quick_process_tif(test_img_pth,patch_size,leafMask,center_h,center_w,half_side )
+
             #print('slidename + resized.png:',slidename)
             #cv2.imwrite(slidename+'resized.png',resized_image)
 #            normalized_image = cv2.cvtColor(normalized_image,cv2.COLOR_BGR2RGB)
@@ -675,15 +701,17 @@ class GUI(tk.Frame):
             # preliminary fill holes? don't know if this is needed
             img_close = closing(img, square(3))
             img_close = pp.fillHoles( img_close )
-            labeled_img = label(img_close, connectivity=2)
+            #labeled_img = label(img_close, connectivity=2)
 
             #print('pla :',pla)
             #print('num_lesions :',num_lesions)
-            #labeled_img = pp.erodeSegMap( img_close,num_lesions,pla,pred_img_pth )
+            labeled_img = pp.erodeSegMap( img_close,num_lesions,pla,pred_img_pth )
 
             # combine regions that are close to each other
             ref_ecc = 0.92  # post-processing
             labeled_img = pp.combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask )
+            img_CR = vl2im(np.where(labeled_img > 0, 1, 0))
+            io.imsave(pred_img_pth.replace('.png', '_CR.png'), img_CR)
 
             # Draw circles around all areas with the same label to fill in any dounuts and crescents
             #postProcessed_img_pth = os.path.join( postprocess_slide_dir,slidename + "_postProcessed.png" )
@@ -701,9 +729,9 @@ class GUI(tk.Frame):
             # Filter to num_lesions here
             #new_labeled_img = self.numLesionsFilter( new_labeled_img,self.num_lesions )
             # This should be called something else
-            # Mask background was removed, regions were expanded, combined,filtered by eccentricity
-            # circled, and filled.
-            # The only thing left is is filter out the largest lesions and to match them to the 
+            # Mask background was removed, filtered by eccentricity and size
+
+            # The only thing left is is filter out the largest lesions and to match them to the
             # previous existing lesion areas
             #TODO check the save path here:
             # this should be the image after it is grouped into regions,
@@ -731,7 +759,8 @@ class GUI(tk.Frame):
             im_to_write = cv2.add( leaf_bgr,lesion_fg )
 
             # what is this blurring for? maybe we don't need it?
-            blurred = cv2.GaussianBlur( lesion,(5,5),0 )
+            #blurred = cv2.GaussianBlur( lesion,(5,5),0 )
+            blurred = cv2.GaussianBlur( lesion,(1,1),0 )
             #TODO fix this so that it isn't a loop
             r,c = blurred.shape
             for row in range( r ):
@@ -740,6 +769,11 @@ class GUI(tk.Frame):
                         blurred[row,col] = 76
             blurred_bit = cv2.bitwise_not( blurred )
             _,labels,stats,centroid = cv2.connectedComponentsWithStats( blurred_bit )
+            #img_binary = np.where(labeled_img>0,1,0)
+            #_,labels,stats,centroid = cv2.connectedComponentsWithStats( img_binary )
+            #_,labels,stats,centroid = cv2.connectedComponentsWithStats( lesion )
+            #print('max(labels) :',np.max(labels))
+            #print('stats :',stats)
 ###################################################################################################
 
             rect_list = []
@@ -766,7 +800,7 @@ class GUI(tk.Frame):
             sought = [0, 0, 255]
             lesion = []
 
-            #print('contour_arr :',contour_arr)
+            #print('contour_arr 0:',contour_arr)
             # Sort by contour size and take n_lesion largest areas, then sort by x+y locations
             contours_ordered = pp.sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index,self.num_lesions )
             #print('contours_ordered :',contours_ordered)
