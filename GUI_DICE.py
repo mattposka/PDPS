@@ -677,6 +677,10 @@ class GUI(tk.Frame):
             img_close = pp.fillHoles( img_close )
             labeled_img = label(img_close, connectivity=2)
 
+            #print('pla :',pla)
+            #print('num_lesions :',num_lesions)
+            #labeled_img = pp.erodeSegMap( img_close,num_lesions,pla,pred_img_pth )
+
             # combine regions that are close to each other
             ref_ecc = 0.92  # post-processing
             labeled_img = pp.combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask )

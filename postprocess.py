@@ -18,9 +18,68 @@ def saveOrigImg( postprocess_dir,slidename,resized_image ):
     orig_img_pth = os.path.join(postprocess_dir, slidename + '_Original.png')
     cv2.imwrite(orig_img_pth, resized_image)
 
-#def erodeSegMap( img ):
-#
-#    return img_erode
+def testSegMap( labels,num_lesions,pla ):
+    good_lesions = 0
+    if pla == 0:
+        return True
+    for i in range((np.max(labels))):
+        label_region_size = np.sum( np.where(labels==(i+1),1,0) )
+        print('label_region_size :',label_region_size )
+        if label_region_size > 0.4*pla and label_region_size < 1.5*pla:
+            good_lesions += 1
+    print('good_lesions :',good_lesions)
+    print('nl :',num_lesions)
+    if int(good_lesions) == int(num_lesions):
+        print('returning True')
+        return True
+    else:
+        return False
+
+def erodeSegMap( img,num_lesions,pla,pred_img_pth ):
+    kernel = np.ones( (3,3),np.uint8 )
+    #img_e = img.copy()
+
+    #img_e = cv2.erode( img_e,kernel )
+    labels_erode = label(img)
+
+    # test starting with 1 dilation step
+    dilation_steps = 1
+    GoodErosionStepFound = False
+    for i in range(6):
+        if testSegMap( labels_erode,num_lesions,pla ):
+            print('TRUE')
+            GoodErosionStepFound=True
+            break
+        else:
+            print('FALSE')
+            labels_erode = np.where(labels_erode>0,1,0)
+            labels_erode = np.array(labels_erode, dtype=np.uint8)
+            labels_erode = cv2.erode( labels_erode,kernel )
+            labels_erode = label(labels_erode)
+            dilation_steps += 1
+            labels_erode = np.array(labels_erode, dtype=np.uint8)
+            io.imsave(pred_img_pth.replace('.png','_erode7.png'),labels_erode)
+
+    if GoodErosionStepFound:
+        print('dilation steps :',dilation_steps)
+        for j in range(dilation_steps):
+            labels_dilate = np.zeros( img.shape,np.uint8 )
+            for i in range(np.max(labels_erode)):
+                label_indv = np.where(labels_erode == (i + 1), 1, 0)
+                label_indv = np.array( label_indv,dtype=np.uint8 )
+                labels_dilate = labels_dilate + cv2.dilate( label_indv,kernel )
+            labels_dilate = np.where(labels_dilate>1,0,labels_dilate)
+            labels_dilate = label( labels_dilate )
+            labels_erode = labels_dilate
+
+        labels_erode = np.where(img>0,labels_erode,0)
+    else:
+        labels_erode = img
+
+    labels_erode = label(labels_erode)
+    labels_erode = np.array( labels_erode,dtype=np.uint8 )
+    io.imsave(pred_img_pth.replace('.png', '_erode.png'),labels_erode)
+    return labels_erode
 
 
 # Not used right now
@@ -243,6 +302,17 @@ def addContoursToDF( imageDF,contours_reordered,df_index,num_lesions,pla ):
             imageDF.at[ df_index,'l'+str(l+1)+'_xend' ] = contours_reordered[l,3]
             imageDF.at[ df_index,'l'+str(l+1)+'_ystart' ] = contours_reordered[l,2]
             imageDF.at[ df_index,'l'+str(l+1)+'_yend' ] = contours_reordered[l,4]
+
+            lesion_size = contours_reordered[l,7]
+            if lesion_size != 0:
+                if pla > 0:
+                    if lesion_size < pla*1.5 and lesion_size > pla*0.5:
+                        lesion_total += lesion_size
+                        lesion_count += 1
+                else:
+                    lesion_total += lesion_size
+                    lesion_count += 1
+
         else:
             area_str = 'l'+str(l+1)+'_area'
             imageDF.at[ df_index,area_str ] = 0
@@ -253,16 +323,10 @@ def addContoursToDF( imageDF,contours_reordered,df_index,num_lesions,pla ):
             imageDF.at[ df_index,'l'+str(l+1)+'_ystart' ] = 0
             imageDF.at[ df_index,'l'+str(l+1)+'_yend' ] = 0
 
-        lesion_size = contours_reordered[l,7]
-        if lesion_size != 0:
-            if pla > 0:
-                if lesion_size < pla*1.5 and lesion_size > pla*0.5:
-                    lesion_total += lesion_size
-                    lesion_count += 1
-            else:
-                lesion_total += lesion_size
-                lesion_count += 1
-    lesion_avg = lesion_total / lesion_count
+    if lesion_count > 0:
+        lesion_avg = lesion_total / lesion_count
+    else:
+        lesion_avg = pla
     imageDF.at[ df_index,'Avg Adj Pixel Size' ] = lesion_avg
 
     #slf_size = 1000
