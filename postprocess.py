@@ -80,7 +80,9 @@ def erodeSegMap( img,num_lesions,pla,pred_img_pth ):
     #        io.imsave(pred_img_pth.replace('.png', '_dilated{}.png'.format(j)), img_erode_red)
 
     if GoodErosionStepFound and dilation_steps > 0:
-        ksize = 3+(2*(dilation_steps-1))
+        #TODO Test ksize and other things in here
+        # somehow it seems to be working ok for now :/
+        ksize = 5+(2*(dilation_steps))
         dkernel = np.ones( (ksize,ksize),np.uint8 )
         # print('dilation steps :',dilation_steps)
         labels_dilate = np.zeros(img.shape, np.uint8)
@@ -275,7 +277,7 @@ def checkLesionOrder( imageDF,df_index,contours_ordered,num_lesions ):
     prev_img_df = prev_img_df.reset_index(drop=True)
 
     dfl = len(prev_img_df)
-    print('dfl :', dfl)
+    #print('dfl :', dfl)
     # Here contours_ordered will be:
     # [ w*h,x,y,x+w,y+h,cx,cy,area ]
     new_leaf = False
@@ -284,8 +286,8 @@ def checkLesionOrder( imageDF,df_index,contours_ordered,num_lesions ):
     if len(prev_img_df) > 0:
         goodPrevFound = False
         for dfi in range(dfl):
-            print('dfi :',dfi)
-            print( 'prev_img_df :\n',prev_img_df )
+            #print('dfi :',dfi)
+            #print( 'prev_img_df :\n',prev_img_df )
             if ( prev_img_df.at[dfl-(dfi+1),'l1_area'] > 0 ) and \
                 ( prev_img_df.at[dfl-(dfi+1),'l2_area'] > 0 ) and \
                 ( prev_img_df.at[dfl-(dfi+1),'l3_area'] > 0 ) and \
@@ -325,7 +327,7 @@ def checkLesionOrder( imageDF,df_index,contours_ordered,num_lesions ):
     else:
         contours_reordered = contours_ordered
         new_leaf = True
-    print('contours_reordered :\n', contours_reordered)
+    #print('contours_reordered :\n', contours_reordered)
     return contours_reordered, new_leaf
 
 # Adds reordered contours to the DF
