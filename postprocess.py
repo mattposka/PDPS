@@ -44,7 +44,7 @@ def erodeSegMap( img,num_lesions,pla,pred_img_pth ):
     labels_erode = label(img)
 
     # test starting with 1 dilation step
-    dilation_steps = 1
+    dilation_steps = 0
     GoodErosionStepFound = False
     for i in range(30):
         if testSegMap( labels_erode,num_lesions,pla,erodeNum=i ):
@@ -79,8 +79,8 @@ def erodeSegMap( img,num_lesions,pla,pred_img_pth ):
     #        img_erode_red = vl2im(np.where(labels_erode > 0, 1, 0))
     #        io.imsave(pred_img_pth.replace('.png', '_dilated{}.png'.format(j)), img_erode_red)
 
-    if GoodErosionStepFound:
-        ksize = 3+(2*dilation_steps)
+    if GoodErosionStepFound and dilation_steps > 0:
+        ksize = 3+(2*(dilation_steps-1))
         dkernel = np.ones( (ksize,ksize),np.uint8 )
         # print('dilation steps :',dilation_steps)
         labels_dilate = np.zeros(img.shape, np.uint8)
@@ -94,7 +94,7 @@ def erodeSegMap( img,num_lesions,pla,pred_img_pth ):
 
         labels_erode = np.where(img>0,labels_erode,0)
     else:
-        labels_erode = img
+        labels_erode = label(img)
 
     labels_erode = np.where(labels_erode>0,1,0)
     labels_erode = label(labels_erode)
@@ -267,28 +267,31 @@ def sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index,num_lesions ):
 def checkLesionOrder( imageDF,df_index,contours_ordered,num_lesions ):
     prev_img_df = imageDF[ 
                     (imageDF['CameraID']==imageDF.loc[df_index,'CameraID']) &
-                    (imageDF['Year']==imageDF.loc[df_index,'Year']) &
-                    (imageDF['Month']==imageDF.loc[df_index,'Month']) &
-                    (imageDF['Day']==imageDF.loc[df_index,'Day']) &
-                    #(imageDF['index_num']<df_index) &
+                    (imageDF['Year']<=imageDF.loc[df_index,'Year']) &
+                    (imageDF['Month']<=imageDF.loc[df_index,'Month']) &
+                    (imageDF['Day']<=imageDF.loc[df_index,'Day']) &
                     (imageDF['index_num'] < df_index)
-                    #TODO maybe we still want to only compare against prev good imgs?
-                    #(imageDF['index_num'].isin(good_df_indices))
-                    #(imageDF['index_num'].isin(good_df_indices))
                     ]
-    #print('prev_img_df :',prev_img_df)
-    #print('contours_ordered :',contours_ordered)
+    prev_img_df = prev_img_df.reset_index(drop=True)
+
+    dfl = len(prev_img_df)
+    print('dfl :', dfl)
     # Here contours_ordered will be:
     # [ w*h,x,y,x+w,y+h,cx,cy,area ]
     new_leaf = False
+    pd.set_option('display.max_columns', None)
+    contours_reordered = np.zeros(shape=(num_lesions, 8))
     if len(prev_img_df) > 0:
-        dfl = len(prev_img_df)
+        goodPrevFound = False
         for dfi in range(dfl):
+            print('dfi :',dfi)
+            print( 'prev_img_df :\n',prev_img_df )
             if ( prev_img_df.at[dfl-(dfi+1),'l1_area'] > 0 ) and \
                 ( prev_img_df.at[dfl-(dfi+1),'l2_area'] > 0 ) and \
                 ( prev_img_df.at[dfl-(dfi+1),'l3_area'] > 0 ) and \
                 ( prev_img_df.at[dfl-(dfi+1),'l4_area'] > 0 ):
 
+                goodPrevFound = True
                 prev_img_df = prev_img_df.reset_index(drop=True)
                 pd.set_option('display.max_columns', None)
                 dfl = len( prev_img_df )
@@ -317,15 +320,18 @@ def checkLesionOrder( imageDF,df_index,contours_ordered,num_lesions ):
                                 lesion_number_taken.append(j)
                                 found = True
                 break
+        if goodPrevFound == False:
+            contours_reordered = contours_ordered
     else:
         contours_reordered = contours_ordered
         new_leaf = True
+    print('contours_reordered :\n', contours_reordered)
     return contours_reordered, new_leaf
 
 # Adds reordered contours to the DF
 # lesion_size and other information about the lesions
 # Calculates average lesion size and adds to the DF
-def addContoursToDF( imageDF,contours_reordered,df_index,num_lesions,pla ):
+def addContoursToDF( imageDF,contours_reordered,df_index,num_lesions,resize_ratio,pla ):
     lesion_total = 0
     lesion_count = 0
     for l in range( num_lesions ):
@@ -363,7 +369,7 @@ def addContoursToDF( imageDF,contours_reordered,df_index,num_lesions,pla ):
         lesion_avg = lesion_total / lesion_count
     else:
         lesion_avg = pla
-    imageDF.at[ df_index,'Avg Adj Pixel Size' ] = lesion_avg
+    imageDF.at[ df_index,'Avg Adj Pixel Size' ] = lesion_avg * resize_ratio
 
     #slf_size = 1000
     #slf = contours_reordered[:num_lesions,7]

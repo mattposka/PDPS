@@ -613,14 +613,10 @@ class GUI(tk.Frame):
             newLeaf = True
             prev_img_df = self.imageDF[
                 (self.imageDF['CameraID'] == self.imageDF.loc[df_index, 'CameraID']) &
-                (self.imageDF['Year'] == self.imageDF.loc[df_index, 'Year']) &
-                (self.imageDF['Month'] == self.imageDF.loc[df_index, 'Month']) &
-                (self.imageDF['Day'] == self.imageDF.loc[df_index, 'Day']) &
-                # (imageDF['index_num']<df_index) &
+                (self.imageDF['Year'] <= self.imageDF.loc[df_index, 'Year']) &
+                (self.imageDF['Month'] <= self.imageDF.loc[df_index, 'Month']) &
+                (self.imageDF['Day'] <= self.imageDF.loc[df_index, 'Day']) &
                 (self.imageDF['index_num'] < df_index)
-                # TODO maybe we still want to only compare against prev good imgs?
-                # (imageDF['index_num'].isin(good_df_indices))
-                # (imageDF['index_num'].isin(good_df_indices))
                 ]
             if len(prev_img_df) > 0:
                 newLeaf = False
@@ -811,7 +807,7 @@ class GUI(tk.Frame):
             # add reordered contours to the DF
             if new_leaf == True:
                 pla = 0
-            self.imageDF,pla = pp.addContoursToDF( self.imageDF,contours_reordered,df_index,self.num_lesions,pla )
+            self.imageDF,pla = pp.addContoursToDF( self.imageDF,contours_reordered,df_index,self.num_lesions,resize_ratio,pla )
 
 
             # check if segmentation was good
