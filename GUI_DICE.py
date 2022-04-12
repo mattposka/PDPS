@@ -4,6 +4,8 @@ import tkinter as tk
 from tkinter.ttk import *
 import tkinter.font as tkFont
 from tkinter import filedialog
+
+import skimage.measure
 from PIL import ImageTk
 from operator import itemgetter
 import pandas as pd
@@ -35,23 +37,24 @@ import model.u_netDICE_Erode_Run as u_netDICE_Erode_Run
 
 import torch.nn as nn
 #from merge_npz_final import merge_npz
-from merge_npz_finalFull import merge_npz
-from scipy.sparse import load_npz, save_npz, csr_matrix, coo_matrix
-from scipy.misc import imread, imsave
+#from merge_npz_finalFull import merge_npz
+#from scipy.sparse import load_npz, save_npz, csr_matrix, coo_matrix
+#from scipy.misc import imread, imsave
 import imageio as io
-import scipy.misc as spm
+#import scipy.misc as spm
 from PIL import Image
 from utils.transforms import vl2im, im2vl
 from skimage import filters
 from skimage.measure import label, regionprops
 from skimage.morphology import closing, square, remove_small_objects
-from utils.postprocessing import CRFs
-import scipy.stats as ss
-import matplotlib.pyplot as plt
-import pickle as p
+#from utils.postprocessing import CRFs
+#import scipy.stats as ss
+#import matplotlib.pyplot as plt
+#import pickle as p
 import datetime as dt
 import glob
 import warnings
+import matplotlib.pyplot as plt
 
 import shutil
 
@@ -482,12 +485,13 @@ class GUI(tk.Frame):
     # draw rectangles around the lesions
     def drawRecsAndSaveImg( self,contours_reordered,im_to_write,imgsWLesions_dir,df_index ):
         for j in range( len(contours_reordered) ):
-            cv2.putText(im_to_write, str(j+1), (int(contours_reordered[j,5]), int(contours_reordered[j,6])), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 0), 1)
-            start = (int(contours_reordered[j,1]),int(contours_reordered[j,2]))
-            end = (int(contours_reordered[j,3]),int(contours_reordered[j,4]))
-            color = (0,255,0)
-            thickness = 2
-            cv2.rectangle( im_to_write,start,end,color,thickness )
+            if contours_reordered[j,7] > 0:
+                cv2.putText(im_to_write, str(j+1), (int(contours_reordered[j,5]), int(contours_reordered[j,6])), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 0), 1)
+                start = (int(contours_reordered[j,1]),int(contours_reordered[j,2]))
+                end = (int(contours_reordered[j,3]),int(contours_reordered[j,4]))
+                color = (0,255,0)
+                thickness = 2
+                cv2.rectangle( im_to_write,start,end,color,thickness )
         img_sav_pth = os.path.join( imgsWLesions_dir,self.imageDF.loc[df_index,'Image Name'] )
         cv2.imwrite( img_sav_pth,im_to_write )
 
@@ -589,11 +593,14 @@ class GUI(tk.Frame):
         model.load_state_dict(saved_state_dict['state_dict'])
         model.eval()
 
-        pla = 0
+        #TODO average plug size here
+        # This may need to change for different pathogens or plugs?
+        pla = 1600
         leafMask = []
         center_h = 0
         center_w = 0
         half_side = 0
+        goodPrevFound = False
         for df_index,df_row in self.imageDF.iterrows(): 
             print( '\nCompleted {}/{} images'.format( df_index,len(self.imageDF) ) )
 
@@ -610,7 +617,7 @@ class GUI(tk.Frame):
             # image_fg_size is the size of the side of the square containing the entire unresized leaf
             # save this number for later use when to determine the actual size of all of the lesions later
 
-            newLeaf = True
+            new_leaf = True
             prev_img_df = self.imageDF[
                 (self.imageDF['CameraID'] == self.imageDF.loc[df_index, 'CameraID']) &
                 (self.imageDF['Year'] <= self.imageDF.loc[df_index, 'Year']) &
@@ -619,12 +626,14 @@ class GUI(tk.Frame):
                 (self.imageDF['index_num'] < df_index)
                 ]
             if len(prev_img_df) > 0:
-                newLeaf = False
+                new_leaf = False
 
-            if newLeaf == True:
+            if new_leaf == True:
                 resized_image, normalized_image, leaf_mask, resize_ratio, center_h, center_w, half_side \
                     = process_tif(test_img_pth,patch_size,mean=IMG_MEAN )
                 leafMask = leaf_mask
+                pla = 1600
+                goodPrevFound = False
             else:
                 resized_image, normalized_image, leaf_mask, resize_ratio, = quick_process_tif(test_img_pth,patch_size,leafMask,center_h,center_w,half_side )
 
@@ -701,12 +710,17 @@ class GUI(tk.Frame):
 
             #print('pla :',pla)
             #print('num_lesions :',num_lesions)
-            labeled_img = pp.erodeSegMap( img_close,num_lesions,pla,pred_img_pth )
+            labeled_img = pp.erodeSegMap( img_close,num_lesions,new_leaf,pla,pred_img_pth )
+            #print('np.unique(labeled_img) ERS:',np.unique(labeled_img))
 
             # combine regions that are close to each other
             ref_ecc = 0.92  # post-processing
             labeled_img = pp.combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask )
-            img_CR = vl2im(np.where(labeled_img > 0, 1, 0))
+            #print('np.unique(labeled_img) CR:',np.unique(labeled_img))
+            #img_CR = vl2im(np.where(labeled_img > 0, 1, 0))
+            #io.imsave(pred_img_pth.replace('.png', '_CR.png'), img_CR)
+
+            img_CR = labeled_img * 255/(np.max(labeled_img))
             io.imsave(pred_img_pth.replace('.png', '_CR.png'), img_CR)
 
             # Draw circles around all areas with the same label to fill in any dounuts and crescents
@@ -732,16 +746,28 @@ class GUI(tk.Frame):
             #TODO check the save path here:
             # this should be the image after it is grouped into regions,
             # circleFiltered,sizeFiltered,and circleFilled
-            io.imsave(postProcessed_img_pth, new_img)
+            #io.imsave( new_img)
+            plt.imsave(postProcessed_img_pth,labeled_img)
+            img_colored = io.imread(postProcessed_img_pth)
+            img_colored = img_colored[:,:,:3]
+
 
             #resized_image, leaf_mask = process_tif(test_img_pth, log, patch_size )
+
+            #######################
+            # TODO Saving and reading the image is what is breaking the segmentation right now!!!
+            #######################
 
 
 ###################################################################################################
             # Overlap cleaned lesions over original leaf image for saving
             leaf_img = resized_image
-            imag = cv2.imread(postProcessed_img_pth, cv2.IMREAD_UNCHANGED)
+            #imag = cv2.imread(postProcessed_img_pth, cv2.IMREAD_UNCHANGED)
+            imag = new_img
+
+            #imag = labeled_img
             lesion = cv2.cvtColor( imag,cv2.COLOR_BGR2GRAY )
+            #lesion = cv2.cvtColor( red_img,cv2.COLOR_BGR2GRAY )
 
             # Here the leaf_bgr is the entire image except for 'lesion', which is the lesion segmentation
             ret,lesion_mask = cv2.threshold( lesion,200,255,cv2.THRESH_BINARY_INV )
@@ -751,48 +777,37 @@ class GUI(tk.Frame):
 
             lesion_mask_inv = cv2.bitwise_not( lesion_mask )
             leaf_bgr = cv2.bitwise_and( leaf_img,leaf_img,mask=lesion_mask_inv )
-            lesion_fg = cv2.bitwise_and( imag,imag,mask=lesion_mask )
+            #lesion_fg = cv2.bitwise_and( imag,imag,mask=lesion_mask )
+            lesion_fg = cv2.bitwise_and( img_colored,img_colored,mask=lesion_mask )
+            #print('lesion_fg :',lesion_fg.shape)
+            #print('lesion_bgr :',lesion_bgr.shape)
             im_to_write = cv2.add( leaf_bgr,lesion_fg )
 
-            # what is this blurring for? maybe we don't need it?
-            #blurred = cv2.GaussianBlur( lesion,(5,5),0 )
-            blurred = cv2.GaussianBlur( lesion,(1,1),0 )
-            #TODO fix this so that it isn't a loop
-            r,c = blurred.shape
-            for row in range( r ):
-                for col in range( c ):
-                    if blurred[row,col] != 255 and blurred[row,col] != 76:
-                        blurred[row,col] = 76
-            blurred_bit = cv2.bitwise_not( blurred )
-            _,labels,stats,centroid = cv2.connectedComponentsWithStats( blurred_bit )
-            #img_binary = np.where(labeled_img>0,1,0)
-            #_,labels,stats,centroid = cv2.connectedComponentsWithStats( img_binary )
-            #_,labels,stats,centroid = cv2.connectedComponentsWithStats( lesion )
-            #print('max(labels) :',np.max(labels))
-            #print('stats :',stats)
 ###################################################################################################
-
             rect_list = []
             cir_list = []
 
-            contour_arr = np.zeros(shape=(len(stats), 8))
-            for i in range(len(stats)):
-                # ignore the first entry because it is the background
+            region_props = skimage.measure.regionprops(labeled_img)
+            contour_arr = np.zeros(shape=(len(region_props), 8))
+            for i,prop in enumerate(region_props):
+                #print('prop.bbox :',prop.bbox)
 
                 # get the bounding rect
-                x = stats[i, 0]
-                y = stats[i, 1]
-                w = stats[i, 2]
-                h = stats[i, 3]
+                x = prop.bbox[1]
+                y = prop.bbox[0]
+                xw = prop.bbox[3]
+                yh = prop.bbox[2]
+                w = xw-x
+                h = yh-y
 
-                contour_arr[i, :5] = [w * h, x, y, x + w, y + h]
+                contour_arr[i, :5] = [w * h, x, y, xw, yh]
                 rect_list.append([w * h, (x, y), (x + w, y + h)])
 
-                cx = centroid[i, 0]
-                cy = centroid[i, 1]
+                cy,cx = prop.centroid
                 contour_arr[i, 5:-1] = [int(cx), int(cy)]
-                contour_arr[i, 7] = stats[i, 4]
-    
+
+                contour_arr[i, 7] = prop.area
+
             sought = [0, 0, 255]
             lesion = []
 
@@ -801,17 +816,15 @@ class GUI(tk.Frame):
             contours_ordered = pp.sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index,self.num_lesions )
             #print('contours_ordered :',contours_ordered)
             # check if lesions are in the same order
-            contours_reordered, new_leaf = pp.checkLesionOrder( self.imageDF,df_index,contours_ordered,self.num_lesions )
+            contours_reordered,goodPrevFound = pp.checkLesionOrder( self.imageDF,df_index,contours_ordered,self.num_lesions,goodPrevFound,pla )
             #print('contours_reordered :',contours_reordered)
 
             # add reordered contours to the DF
-            if new_leaf == True:
-                pla = 0
-            self.imageDF,pla = pp.addContoursToDF( self.imageDF,contours_reordered,df_index,self.num_lesions,resize_ratio,pla )
+            self.imageDF,pla = pp.addContoursToDF( self.imageDF,contours_reordered,df_index,self.num_lesions,resize_ratio,new_leaf,pla )
 
 
             # check if segmentation was good
-            self.goodSeg = pp.checkSegQuality( contours_reordered )
+            #self.goodSeg = pp.checkSegQuality( contours_reordered )
 
             # draw rectangles around the lesions
             self.drawRecsAndSaveImg( contours_reordered,im_to_write,imgsWLesions_dir,df_index )
@@ -833,7 +846,7 @@ class GUI(tk.Frame):
 
             reformatted_csv_df = csv_df
             for i in range(self.num_lesions-1):
-                reformatted_csv_df = reformatted_csv_df.append(csv_df)
+                reformatted_csv_df = pd.concat([reformatted_csv_df,csv_df])
             reformatted_csv_df = reformatted_csv_df.reset_index(drop=True)
             reformatted_csv_df['Lesion Area Pixels'] = ''
             reformatted_csv_df['Lesion #'] = ''
@@ -875,6 +888,15 @@ class GUI(tk.Frame):
                     'Gene of Interest',
                     'Comments',
                     'Description']]
+
+            # Write zero to the Avg Adj Pixel Size column if it is equal to the prev lesion
+            # This happens when a bad segmentation occurs
+            aaps = reformatted_csv_df['Avg Adj Pixel Size']
+            for i in range(len(aaps)-1,self.num_lesions,-1):
+                j = i - self.num_lesions
+                if aaps[i] == aaps[j]:
+                    aaps[i] = 0
+            reformatted_csv_df['Avg Adj Pixel Size'] = aaps
 
 
 
