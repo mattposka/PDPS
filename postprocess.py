@@ -178,9 +178,9 @@ def combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask,expand_ratio=0,ma
 
     # remove non-circle region
     new_props = regionprops(labeled_image)
-    #labeled_img = circleFilter( new_props,labeled_image,ref_ecc=ref_ecc )
-    #lab_img_pth = pred_img_pth.replace( '.png','_NonCircleFilter.png' )
-    #io.imsave( lab_img_pth,labeled_image )
+    labeled_img = circleFilter( new_props,labeled_image,ref_ecc=ref_ecc )
+    lab_img_pth = pred_img_pth.replace( '.png','_NonCircleFilter.png' )
+    io.imsave( lab_img_pth,labeled_image )
 
     #TODO test leaf_mask filter again later
     #new_props = regionprops(labeled_image)
