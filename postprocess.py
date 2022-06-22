@@ -14,6 +14,7 @@ import skimage.segmentation
 #from skimage.morphology import closing, square, remove_small_objects
 import cv2
 import os
+import matplotlib.pyplot as plt
 
 def saveOrigImg( postprocess_dir,slidename,resized_image ):
     orig_img_pth = os.path.join(postprocess_dir, slidename + '_Original.png')
@@ -93,7 +94,8 @@ def erodeSegMap( img,num_lesions,new_leaf,pla,pred_img_pth ):
     #print('goodErosionStepFound :',GoodErosionStepFound)
     labels_clean = label(img)
     if GoodErosionStepFound and dilation_steps > 0:
-        labels_expand = skimage.segmentation.expand_labels(labels_erode_good, distance=3*dilation_steps)
+        plt.imsave(pred_img_pth.replace('.png','_eroded.png'),labels_erode_good)
+        labels_expand = skimage.segmentation.expand_labels(labels_erode_good, distance=2*dilation_steps)
         labels_clean = labels_expand
 
     labels_clean = np.array( labels_clean,dtype=np.uint8 )
@@ -122,7 +124,7 @@ def numLesionsFilter( new_labeled_img,num_lesions ):
 # fills doughnuts, but objects must be fully closed for it to work
 def fillHoles( img ):
     ##################################################################################################
-    # floolfill stuf
+    # floodfill stuff
     ##################################################################################################
     img_copy = img.copy()
     img_copy[ img_copy!=0 ] = 255
@@ -303,12 +305,13 @@ def checkLesionOrder( imageDF,df_index,contours_ordered,num_lesions,goodPrevFoun
                     found = False
                     if xs != 0 and xe != 0 and ys != 0 and ye != 0:
                         for j in range( len(contours_ordered) ):
-                            cx = contours_ordered[j,5]
-                            cy = contours_ordered[j,6]
-                            if cx > xs and cx < xe and cy > ys and cy < ye and found == False:
-                                contours_reordered[i,:] = contours_ordered[j,:]
-                                found = True
-                                lesion_number_taken.append(j)
+                            if j not in lesion_number_taken and found == False:
+                                cx = contours_ordered[j,5]
+                                cy = contours_ordered[j,6]
+                                if cx > xs and cx < xe and cy > ys and cy < ye and found == False:
+                                    contours_reordered[i,:] = contours_ordered[j,:]
+                                    found = True
+                                    lesion_number_taken.append(j)
                     else:
                         for j in range( len(contours_ordered) ):
                             if j not in lesion_number_taken and found == False:

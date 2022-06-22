@@ -58,6 +58,11 @@ import matplotlib.pyplot as plt
 
 import shutil
 
+from skimage.segmentation import watershed
+from skimage import measure
+from skimage.feature import peak_local_max
+from scipy import ndimage
+
 # There is a UserWarning for one pytorch layer that I dont' want printing
 warnings.filterwarnings('ignore',category=UserWarning)
 
@@ -711,16 +716,26 @@ class GUI(tk.Frame):
             #print('pla :',pla)
             #print('num_lesions :',num_lesions)
             labeled_img = pp.erodeSegMap( img_close,num_lesions,new_leaf,pla,pred_img_pth )
+
+            #distance = ndimage.distance_transform_edt(img_close)
+            #local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((3, 3)), labels=img_close)
+            #markers = measure.label(local_maxi)
+            #labels_ws = watershed(-distance, markers, mask=img_close)
+            #labels_ws = label(labels_ws)
+
             #print('np.unique(labeled_img) ERS:',np.unique(labeled_img))
 
             # combine regions that are close to each other
             ref_ecc = 0.92  # post-processing
             labeled_img = pp.combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask )
+            #labeled_img = pp.combineRegions( labels_ws,ref_ecc,pred_img_pth,leaf_mask )
             #print('np.unique(labeled_img) CR:',np.unique(labeled_img))
             #img_CR = vl2im(np.where(labeled_img > 0, 1, 0))
             #io.imsave(pred_img_pth.replace('.png', '_CR.png'), img_CR)
 
-            img_CR = labeled_img * 255/(np.max(labeled_img))
+            img_CR = labeled_img
+            if np.max(labeled_img)>0:
+                img_CR = labeled_img * 255/(np.max(labeled_img))
             io.imsave(pred_img_pth.replace('.png', '_CR.png'), img_CR)
 
             # Draw circles around all areas with the same label to fill in any dounuts and crescents
@@ -811,13 +826,13 @@ class GUI(tk.Frame):
             sought = [0, 0, 255]
             lesion = []
 
-            #print('contour_arr 0:',contour_arr)
+            print('contour_arr 0:',contour_arr)
             # Sort by contour size and take n_lesion largest areas, then sort by x+y locations
             contours_ordered = pp.sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index,self.num_lesions )
-            #print('contours_ordered :',contours_ordered)
+            print('contours_ordered :',contours_ordered)
             # check if lesions are in the same order
             contours_reordered,goodPrevFound = pp.checkLesionOrder( self.imageDF,df_index,contours_ordered,self.num_lesions,goodPrevFound,pla )
-            #print('contours_reordered :',contours_reordered)
+            print('contours_reordered :',contours_reordered)
 
             # add reordered contours to the DF
             self.imageDF,pla = pp.addContoursToDF( self.imageDF,contours_reordered,df_index,self.num_lesions,resize_ratio,new_leaf,pla )
