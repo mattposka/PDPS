@@ -19,7 +19,7 @@ import torch
 from torch.utils import data
 #from utils.datasets import LEAFTest
 from utils.datasetsFull import LEAFTest
-import postprocess as pp
+import postprocess as postp
 
 #from model.u_net import UNet
 #from model.u_net2 import UNet2
@@ -600,12 +600,15 @@ class GUI(tk.Frame):
 
         #TODO average plug size here
         # This may need to change for different pathogens or plugs?
-        pla = 1600
+        #pla = 1600
+        leaf_seg_stack = []
+        leaf_img_stack = []
+        start_image_df_idx = None
         leafMask = []
         center_h = 0
         center_w = 0
         half_side = 0
-        goodPrevFound = False
+        #goodPrevFound = False
         for df_index,df_row in self.imageDF.iterrows(): 
             print( '\nCompleted {}/{} images'.format( df_index,len(self.imageDF) ) )
 
@@ -634,13 +637,19 @@ class GUI(tk.Frame):
                 new_leaf = False
 
             if new_leaf == True:
+                if leaf_seg_stack:
+                    seg_stack,label_map_ws = postp.watershedSegStack(np.array(leaf_seg_stack),self.num_lesions,postprocess_dir,self.imageDF,start_image_df_idx)
+                start_image_df_idx = df_index
                 resized_image, normalized_image, leaf_mask, resize_ratio, center_h, center_w, half_side \
                     = process_tif(test_img_pth,patch_size,mean=IMG_MEAN )
+                leaf_img_stack = [resized_image]
+                leaf_seg_stack = []
                 leafMask = leaf_mask
-                pla = 1600
-                goodPrevFound = False
+                #pla = 1600
+                #goodPrevFound = False
             else:
                 resized_image, normalized_image, leaf_mask, resize_ratio, = quick_process_tif(test_img_pth,patch_size,leafMask,center_h,center_w,half_side )
+                leaf_img_stack.append(resized_image)
 
             #print('slidename + resized.png:',slidename)
             #cv2.imwrite(slidename+'resized.png',resized_image)
@@ -649,6 +658,7 @@ class GUI(tk.Frame):
             #print('GUI - resized_image.max :',np.max(resized_image))
             #print('GUI - normalized_image.shape :',normalized_image.shape)
             #print('GUI - normalized_image.max :',np.max(normalized_image))
+
             self.imageDF.at[ df_index,'ResizeRatio' ] = resize_ratio
 
             #print('np.max(normalized_image) :',np.max(normalized_image) )
@@ -697,11 +707,13 @@ class GUI(tk.Frame):
 #####################################################################################################################
 #####################################################################################################################
 
+            leaf_seg_stack.append(msk)
+
             print( '\nPostProcessing now!' )
             
             slide_map_name_png = slidename + '_OSeg.png'
 
-            pp.saveOrigImg( postprocess_dir,slidename,resized_image)
+            postp.saveOrigImg( postprocess_dir,slidename,resized_image)
 
             pred_img_pth = os.path.join( postprocess_dir,slide_map_name_png )
             #img = spm.imread(pred_img_pth)
@@ -710,12 +722,12 @@ class GUI(tk.Frame):
 
             # preliminary fill holes? don't know if this is needed
             img_close = closing(img, square(3))
-            img_close = pp.fillHoles( img_close )
+            img_close = postp.fillHoles( img_close )
             #labeled_img = label(img_close, connectivity=2)
 
             #print('pla :',pla)
             #print('num_lesions :',num_lesions)
-            labeled_img = pp.erodeSegMap( img_close,num_lesions,new_leaf,pla,pred_img_pth )
+            labeled_img = postp.erodeSegMap( img_close,num_lesions,new_leaf,pla,pred_img_pth )
 
             #distance = ndimage.distance_transform_edt(img_close)
             #local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((3, 3)), labels=img_close)
@@ -727,8 +739,8 @@ class GUI(tk.Frame):
 
             # combine regions that are close to each other
             ref_ecc = 0.92  # post-processing
-            labeled_img = pp.combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask )
-            #labeled_img = pp.combineRegions( labels_ws,ref_ecc,pred_img_pth,leaf_mask )
+            labeled_img = postp.combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask )
+            #labeled_img = postp.combineRegions( labels_ws,ref_ecc,pred_img_pth,leaf_mask )
             #print('np.unique(labeled_img) CR:',np.unique(labeled_img))
             #img_CR = vl2im(np.where(labeled_img > 0, 1, 0))
             #io.imsave(pred_img_pth.replace('.png', '_CR.png'), img_CR)
@@ -741,7 +753,7 @@ class GUI(tk.Frame):
             # Draw circles around all areas with the same label to fill in any dounuts and crescents
             #postProcessed_img_pth = os.path.join( postprocess_slide_dir,slidename + "_postProcessed.png" )
             postProcessed_img_pth = os.path.join( postprocess_dir,slidename + "_postProcessed.png" )
-            #new_img =  pp.drawCircles( labeled_img,postProcessed_img_pth )
+            #new_img =  postp.drawCircles( labeled_img,postProcessed_img_pth )
             new_img = labeled_img
 
             # is this needed?
@@ -828,18 +840,18 @@ class GUI(tk.Frame):
 
             print('contour_arr 0:',contour_arr)
             # Sort by contour size and take n_lesion largest areas, then sort by x+y locations
-            contours_ordered = pp.sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index,self.num_lesions )
+            contours_ordered = postp.sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index,self.num_lesions )
             print('contours_ordered :',contours_ordered)
             # check if lesions are in the same order
-            contours_reordered,goodPrevFound = pp.checkLesionOrder( self.imageDF,df_index,contours_ordered,self.num_lesions,goodPrevFound,pla )
+            contours_reordered,goodPrevFound = postp.checkLesionOrder( self.imageDF,df_index,contours_ordered,self.num_lesions,goodPrevFound,pla )
             print('contours_reordered :',contours_reordered)
 
             # add reordered contours to the DF
-            self.imageDF,pla = pp.addContoursToDF( self.imageDF,contours_reordered,df_index,self.num_lesions,resize_ratio,new_leaf,pla )
+            self.imageDF,pla = postp.addContoursToDF( self.imageDF,contours_reordered,df_index,self.num_lesions,resize_ratio,new_leaf,pla )
 
 
             # check if segmentation was good
-            #self.goodSeg = pp.checkSegQuality( contours_reordered )
+            #self.goodSeg = postp.checkSegQuality( contours_reordered )
 
             # draw rectangles around the lesions
             self.drawRecsAndSaveImg( contours_reordered,im_to_write,imgsWLesions_dir,df_index )

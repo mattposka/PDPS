@@ -11,10 +11,12 @@ from utils.transforms import vl2im, im2vl
 #from skimage import filters
 from skimage.measure import label, regionprops
 import skimage.segmentation
+from skimage.segmentation import watershed
 #from skimage.morphology import closing, square, remove_small_objects
 import cv2
 import os
 import matplotlib.pyplot as plt
+import scipy.ndimage as ndi
 
 def saveOrigImg( postprocess_dir,slidename,resized_image ):
     orig_img_pth = os.path.join(postprocess_dir, slidename + '_Original.png')
@@ -447,3 +449,106 @@ def checkSegQuality( contours_reordered ):
 #else:
 #    self.good_df_indices.append( df_index )
 ##################################################################################################
+
+def watershedSegStack(seg_stack,num_lesions,postprocess_dir,imageDF,df_index,last_img):
+    seg_stack = seg_stack.copy()
+    imgs,rows,cols = seg_stack.shape()
+    seg_stack = seg_stack / imgs
+
+    bin_img = np.where(sum_stacks > 0, True, False)
+    distance = ndi.distance_transform_edt(bin_img)
+
+    good_start = False
+    min_lesions_over_threshold = float('inf')
+    best_threshold = None
+
+    threshold = 1.0
+    for i in range(20):
+
+        threshold -= 0.05
+        starting_regions = np.where(sum_stacks >= threshold, 1, 0)
+        labels = label(starting_regions)
+
+        num_lesions_found = 0
+        regions = regionprops(labels)
+        for region in regions:
+            if region.area > 500:
+                num_lesions_found += 1
+        if num_lesions_found == num_lesions:
+            good_start = True
+            break
+        else:
+            if num_lesions < min_lesions_over_threshold:
+                best_threshold = threshold
+
+    if not good_start:
+        threshold = best_threshold
+        starting_regions = np.where(sum_stacks >= threshold, 1, 0)
+        labels = label(starting_regions)
+
+        counts = []
+        regions = label(labels)
+        for region in regions:
+            counts.append([region.area,region.label])
+        counts.sort()
+
+        while len(counts) > num_lesions + 1:
+            area, label_num = counts.pop(0)
+            labels = np.where(labels == label_num, 0, labels)
+
+        # now all the labels will be 1-num_lesions
+        labels_unique = np.unique(labels)
+        for i,lab_u in enumerate(labels_unique):
+            if i == 0:
+                continue
+            labels = np.where(labels==lab_u,i,labels)
+
+    label_map_ws = watershed(-distance, labels, mask=bin_img)
+
+    cam_num = imageDF.loc[df_index, 'CameraID']
+    seg_stack_save_pth = postprocess_dir + 'cam' + str(cam_num) + 'segstack.png'
+    label_map_save_pth = postprocess_dir + 'cam' + str(cam_num) + 'label_map.png'
+    io.imsave( seg_stack_save_pth,seg_stack )
+    io.imsave( label_map_save_pth,label_map_ws )
+
+    return seg_stack, label_map_ws
+
+def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,starting_df_index,postprocess_dir):
+    seg_stack = seg_stack.copy()
+
+    # add first fake segmentation of zero to make processing easier
+    num_imgs,rows,cols = seg_stack.shape()
+    first_seg = np.zeros((1,rows,cols))
+    seg_stack = np.concatenate((first_seg,seg_stack),axis=0)
+
+    for i in range(1,num_imgs+1):
+        df_index = starting_df_index + i
+
+
+        img_name = imageDF.loc[df_index,'Image Name']
+        saveOrigImg( postprocess_dir,img_name,resized_image)
+
+        continuous_seg = seg_stack[i,:,:] + seg_stack[i-1,:,:]
+        seg_image = plt.imshow(labels_ws[continuous_seg>0])
+        leaf_img = img_stack[i-1]
+
+
+            imag = new_img
+
+            #imag = labeled_img
+            lesion = cv2.cvtColor( imag,cv2.COLOR_BGR2GRAY )
+            #lesion = cv2.cvtColor( red_img,cv2.COLOR_BGR2GRAY )
+
+            # Here the leaf_bgr is the entire image except for 'lesion', which is the lesion segmentation
+            ret,lesion_mask = cv2.threshold( lesion,200,255,cv2.THRESH_BINARY_INV )
+
+            #TODO
+            self.prevSegmentation = lesion_mask
+
+            lesion_mask_inv = cv2.bitwise_not( lesion_mask )
+            leaf_bgr = cv2.bitwise_and( leaf_img,leaf_img,mask=lesion_mask_inv )
+            #lesion_fg = cv2.bitwise_and( imag,imag,mask=lesion_mask )
+            lesion_fg = cv2.bitwise_and( img_colored,img_colored,mask=lesion_mask )
+            #print('lesion_fg :',lesion_fg.shape)
+            #print('lesion_bgr :',lesion_bgr.shape)
+            im_to_write = cv2.add( leaf_bgr,lesion_fg )
