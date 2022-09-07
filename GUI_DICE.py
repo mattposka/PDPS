@@ -383,9 +383,14 @@ class GUI(tk.Frame):
             month = int( imname[17:19] )
             day = int( imname[20:22] )
             hour = int( int( imname[23:27] ) / 100 )
-            imagemat.append( [imname,i,cameraID,year,month,day,hour] )
+            #TODO make this self.num_lesions later
+            for j in range(4):
+                imagemat.append([imname, i, cameraID, year, month, day, hour])
 
-        self.imageDF = pd.DataFrame( imagemat,columns=['Image Name','File Location','CameraID','Year','Month','Day','Hour',] )
+        self.imageDF = pd.DataFrame( imagemat,columns=['Image Name','File Location','CameraID','Year','Month','Day','Hour'] )
+        self.imageDF['Lesion #'] = ''
+        self.imageDF['Lesion Area Pixels'] = ''
+        self.imageDF['Adjusted Lesion Pixels'] = ''
         self.imageDF['Camera #'] = self.imageDF['CameraID']
         self.imageDF = self.imageDF.sort_values( by=['CameraID','Year','Month','Day','Hour'] )
         self.imageDF['index_num'] = np.arange( len(self.imageDF) )
@@ -396,23 +401,23 @@ class GUI(tk.Frame):
 
     # Formats the original dataframe based off of the images selected
     def formatDF( self, ):
-        for i in range( self.num_lesions ):
-            area_str = 'l'+str(i+1)+'_area'
-#            radius_str = 'l'+str(i)+'_radius'
-            cenX_str = 'l'+str(i+1)+'_centerX'
-            cenY_str = 'l'+str(i+1)+'_centerY'
-            startX_str = 'l'+str(i+1)+'_xstart'
-            startY_str = 'l'+str(i+1)+'_xend'
-            endX_str = 'l'+str(i+1)+'_ystart'
-            endY_str = 'l'+str(i+1)+'_yend'
-            self.imageDF[ area_str ] = ''
-#            self.imageDF[ radius_str ] = ''
-            self.imageDF[ cenX_str ] = ''
-            self.imageDF[ cenY_str ] = ''
-            self.imageDF[ startX_str ] = ''
-            self.imageDF[ startY_str] = ''
-            self.imageDF[ endX_str ] = ''
-            self.imageDF[ endY_str ] = ''
+        #for i in range( self.num_lesions ):
+            #area_str = 'l'+str(i+1)+'_area'
+#           # radius_str = 'l'+str(i)+'_radius'
+            #cenX_str = 'l'+str(i+1)+'_centerX'
+            #cenY_str = 'l'+str(i+1)+'_centerY'
+            #startX_str = 'l'+str(i+1)+'_xstart'
+            #startY_str = 'l'+str(i+1)+'_xend'
+            #endX_str = 'l'+str(i+1)+'_ystart'
+            #endY_str = 'l'+str(i+1)+'_yend'
+            #self.imageDF[ area_str ] = ''
+#           # self.imageDF[ radius_str ] = ''
+            #self.imageDF[ cenX_str ] = ''
+            #self.imageDF[ cenY_str ] = ''
+            #self.imageDF[ startX_str ] = ''
+            #self.imageDF[ startY_str] = ''
+            #self.imageDF[ endX_str ] = ''
+            #self.imageDF[ endY_str ] = ''
         description = self.e1.get('1.0', END)
         self.imageDF['Avg Adj Pixel Size'] = ''
         self.imageDF['Description'] = description
@@ -511,7 +516,8 @@ class GUI(tk.Frame):
         if n != -1:
             os.environ["CUDA_VISIBLE_DEVICES"] = n
 
-        num_lesions = self.numberOfLesionsEntry.get()
+        self.num_lesions = self.numberOfLesionsEntry.get()
+        num_lesions = self.num_lesions
         print( '\nUsing {} lesions!'.format(num_lesions) )
         self.num_lesions = int( num_lesions )
 
@@ -531,6 +537,7 @@ class GUI(tk.Frame):
         result_dir = os.path.join( root_dir,'resultFiles' )
         if not os.path.exists( result_dir ):
             os.makedirs( result_dir )
+        result_file = os.path.join(result_dir, self.save_file_name+'.csv')
 
         postprocess_dir = os.path.join( root_dir,'postprocessing' )
         if not os.path.exists( postprocess_dir ):
@@ -598,9 +605,7 @@ class GUI(tk.Frame):
         model.load_state_dict(saved_state_dict['state_dict'])
         model.eval()
 
-        #TODO average plug size here
-        # This may need to change for different pathogens or plugs?
-        #pla = 1600
+        num_unique_leaves = len(np.unique(self.imageDF['CameraID']))
         leaf_seg_stack = []
         leaf_img_stack = []
         start_image_df_idx = None
@@ -608,14 +613,16 @@ class GUI(tk.Frame):
         center_h = 0
         center_w = 0
         half_side = 0
+        resize_ratio = 0
         #goodPrevFound = False
-        for df_index,df_row in self.imageDF.iterrows(): 
-            print( '\nCompleted {}/{} images'.format( df_index,len(self.imageDF) ) )
+        cams_completed = 1
+        for df_index,df_row in self.imageDF.iterrows():
+            if df_index % self.num_lesions != 0:
+                continue
 
             #test_img_pth = imagelst[0] # full path and  name of the image, but starts with a '/'
             test_img_pth = df_row[ 'File Location' ]
             filename = test_img_pth.split('/')[-1] # name of the image
-            print( 'Processing image :',filename )
             slidename = filename[:-4] # slidename is just the name of the image w/o extension
             #TODO can I replace slidename with imageName?
 
@@ -638,7 +645,13 @@ class GUI(tk.Frame):
 
             if new_leaf == True:
                 if leaf_seg_stack:
-                    seg_stack,label_map_ws = postp.watershedSegStack(np.array(leaf_seg_stack),self.num_lesions,postprocess_dir,self.imageDF,start_image_df_idx)
+                    print('\nPostProcessing now!')
+                    sum_stack,label_map_ws = postp.watershedSegStack(np.array(leaf_seg_stack),self.num_lesions,postprocess_dir,self.imageDF,start_image_df_idx)
+                    self.imageDF = postp.processSegStack(np.array(leaf_seg_stack),leaf_img_stack,self.num_lesions,label_map_ws,self.imageDF,start_image_df_idx,resize_ratio,postprocess_dir,imgsWLesions_dir)
+                    cams_completed += 1
+
+                print('\nProcessing {}/{} Cameras'.format(cams_completed, num_unique_leaves))
+                print('Processing image :', filename)
                 start_image_df_idx = df_index
                 resized_image, normalized_image, leaf_mask, resize_ratio, center_h, center_w, half_side \
                     = process_tif(test_img_pth,patch_size,mean=IMG_MEAN )
@@ -650,6 +663,7 @@ class GUI(tk.Frame):
             else:
                 resized_image, normalized_image, leaf_mask, resize_ratio, = quick_process_tif(test_img_pth,patch_size,leafMask,center_h,center_w,half_side )
                 leaf_img_stack.append(resized_image)
+                print( 'Processing image :',filename )
 
             #print('slidename + resized.png:',slidename)
             #cv2.imwrite(slidename+'resized.png',resized_image)
@@ -659,7 +673,8 @@ class GUI(tk.Frame):
             #print('GUI - normalized_image.shape :',normalized_image.shape)
             #print('GUI - normalized_image.max :',np.max(normalized_image))
 
-            self.imageDF.at[ df_index,'ResizeRatio' ] = resize_ratio
+            for k in range(self.num_lesions):
+                self.imageDF.at[ df_index+k,'ResizeRatio' ] = resize_ratio
 
             #print('np.max(normalized_image) :',np.max(normalized_image) )
             #print('np.min(normalized_image) :',np.min(normalized_image) )
@@ -685,21 +700,9 @@ class GUI(tk.Frame):
                 formatted_img = formatted_img.astype(np.float32)
                 image_tensor = torch.from_numpy(np.expand_dims(formatted_img,axis=0))
                 output = model(image_tensor).to(device)
-                #Softmax = torch.nn.Softmax2d()
-                #print('before pred here')
-                #pred = torch.max(Softmax(output), dim=1, keepdim=True)
-                #print('pred here')
 
-                #msk = torch.squeeze(pred[1]).data.cpu().numpy()
                 msk = torch.squeeze(output).data.cpu().numpy()
                 msk = np.where(msk>0,1,0)
-
-                pred_im_rgb = vl2im(msk)
-                Fig = Image.fromarray(pred_im_rgb.astype(dtype=np.uint8))
-                Fig.convert('RGB')
-                #FigFile = os.path.join(postprocess_slide_dir,slidename+'_OSeg.png')
-                FigFile = os.path.join(postprocess_dir,slidename+'_OSeg.png')
-                Fig.save(FigFile, 'PNG')
 
                 batch_time.update(time.time() - end)
                 end = time.time()
@@ -709,184 +712,39 @@ class GUI(tk.Frame):
 
             leaf_seg_stack.append(msk)
 
-            print( '\nPostProcessing now!' )
-            
-            slide_map_name_png = slidename + '_OSeg.png'
-
-            postp.saveOrigImg( postprocess_dir,slidename,resized_image)
-
-            pred_img_pth = os.path.join( postprocess_dir,slide_map_name_png )
-            #img = spm.imread(pred_img_pth)
-            #img = im2vl(img) # This returns binary mask of lesion areas = 1 and background = 0
-            img = im2vl(pred_im_rgb) # This returns binary mask of lesion areas = 1 and background = 0
-
-            # preliminary fill holes? don't know if this is needed
-            img_close = closing(img, square(3))
-            img_close = postp.fillHoles( img_close )
-            #labeled_img = label(img_close, connectivity=2)
-
-            #print('pla :',pla)
-            #print('num_lesions :',num_lesions)
-            labeled_img = postp.erodeSegMap( img_close,num_lesions,new_leaf,pla,pred_img_pth )
-
-            #distance = ndimage.distance_transform_edt(img_close)
-            #local_maxi = peak_local_max(distance, indices=False, footprint=np.ones((3, 3)), labels=img_close)
-            #markers = measure.label(local_maxi)
-            #labels_ws = watershed(-distance, markers, mask=img_close)
-            #labels_ws = label(labels_ws)
-
-            #print('np.unique(labeled_img) ERS:',np.unique(labeled_img))
-
-            # combine regions that are close to each other
-            ref_ecc = 0.92  # post-processing
-            labeled_img = postp.combineRegions( labeled_img,ref_ecc,pred_img_pth,leaf_mask )
-            #labeled_img = postp.combineRegions( labels_ws,ref_ecc,pred_img_pth,leaf_mask )
-            #print('np.unique(labeled_img) CR:',np.unique(labeled_img))
-            #img_CR = vl2im(np.where(labeled_img > 0, 1, 0))
-            #io.imsave(pred_img_pth.replace('.png', '_CR.png'), img_CR)
-
-            img_CR = labeled_img
-            if np.max(labeled_img)>0:
-                img_CR = labeled_img * 255/(np.max(labeled_img))
-            io.imsave(pred_img_pth.replace('.png', '_CR.png'), img_CR)
-
-            # Draw circles around all areas with the same label to fill in any dounuts and crescents
-            #postProcessed_img_pth = os.path.join( postprocess_slide_dir,slidename + "_postProcessed.png" )
-            postProcessed_img_pth = os.path.join( postprocess_dir,slidename + "_postProcessed.png" )
-            #new_img =  postp.drawCircles( labeled_img,postProcessed_img_pth )
-            new_img = labeled_img
-
-            # is this needed?
-            #TODO check this
-            new_img = np.where(new_img > 0, 1, 0)
-            new_img = vl2im(new_img)
-            ################################################################################################
-            
-            #TODO i think they can be filtered later
-            # Filter to num_lesions here
-            #new_labeled_img = self.numLesionsFilter( new_labeled_img,self.num_lesions )
-            # This should be called something else
-            # Mask background was removed, filtered by eccentricity and size
-
-            # The only thing left is is filter out the largest lesions and to match them to the
-            # previous existing lesion areas
-            #TODO check the save path here:
-            # this should be the image after it is grouped into regions,
-            # circleFiltered,sizeFiltered,and circleFilled
-            #io.imsave( new_img)
-            plt.imsave(postProcessed_img_pth,labeled_img)
-            img_colored = io.imread(postProcessed_img_pth)
-            img_colored = img_colored[:,:,:3]
-
-
-            #resized_image, leaf_mask = process_tif(test_img_pth, log, patch_size )
-
-            #######################
-            # TODO Saving and reading the image is what is breaking the segmentation right now!!!
-            #######################
-
-
-###################################################################################################
-            # Overlap cleaned lesions over original leaf image for saving
-            leaf_img = resized_image
-            #imag = cv2.imread(postProcessed_img_pth, cv2.IMREAD_UNCHANGED)
-            imag = new_img
-
-            #imag = labeled_img
-            lesion = cv2.cvtColor( imag,cv2.COLOR_BGR2GRAY )
-            #lesion = cv2.cvtColor( red_img,cv2.COLOR_BGR2GRAY )
-
-            # Here the leaf_bgr is the entire image except for 'lesion', which is the lesion segmentation
-            ret,lesion_mask = cv2.threshold( lesion,200,255,cv2.THRESH_BINARY_INV )
-
-            #TODO
-            self.prevSegmentation = lesion_mask
-
-            lesion_mask_inv = cv2.bitwise_not( lesion_mask )
-            leaf_bgr = cv2.bitwise_and( leaf_img,leaf_img,mask=lesion_mask_inv )
-            #lesion_fg = cv2.bitwise_and( imag,imag,mask=lesion_mask )
-            lesion_fg = cv2.bitwise_and( img_colored,img_colored,mask=lesion_mask )
-            #print('lesion_fg :',lesion_fg.shape)
-            #print('lesion_bgr :',lesion_bgr.shape)
-            im_to_write = cv2.add( leaf_bgr,lesion_fg )
-
-###################################################################################################
-            rect_list = []
-            cir_list = []
-
-            region_props = skimage.measure.regionprops(labeled_img)
-            contour_arr = np.zeros(shape=(len(region_props), 8))
-            for i,prop in enumerate(region_props):
-                #print('prop.bbox :',prop.bbox)
-
-                # get the bounding rect
-                x = prop.bbox[1]
-                y = prop.bbox[0]
-                xw = prop.bbox[3]
-                yh = prop.bbox[2]
-                w = xw-x
-                h = yh-y
-
-                contour_arr[i, :5] = [w * h, x, y, xw, yh]
-                rect_list.append([w * h, (x, y), (x + w, y + h)])
-
-                cy,cx = prop.centroid
-                contour_arr[i, 5:-1] = [int(cx), int(cy)]
-
-                contour_arr[i, 7] = prop.area
-
-            sought = [0, 0, 255]
-            lesion = []
-
-            print('contour_arr 0:',contour_arr)
-            # Sort by contour size and take n_lesion largest areas, then sort by x+y locations
-            contours_ordered = postp.sortAndFilterContours( contour_arr,imgsWLesions_dir,df_index,self.num_lesions )
-            print('contours_ordered :',contours_ordered)
-            # check if lesions are in the same order
-            contours_reordered,goodPrevFound = postp.checkLesionOrder( self.imageDF,df_index,contours_ordered,self.num_lesions,goodPrevFound,pla )
-            print('contours_reordered :',contours_reordered)
-
-            # add reordered contours to the DF
-            self.imageDF,pla = postp.addContoursToDF( self.imageDF,contours_reordered,df_index,self.num_lesions,resize_ratio,new_leaf,pla )
-
-
-            # check if segmentation was good
-            #self.goodSeg = postp.checkSegQuality( contours_reordered )
-
-            # draw rectangles around the lesions
-            self.drawRecsAndSaveImg( contours_reordered,im_to_write,imgsWLesions_dir,df_index )
-
-
-            # Add leaf to result files
-            result_file = os.path.join( result_dir,self.save_file_name+'.csv' )
-            bad_result_file = os.path.join( result_dir,self.save_file_name+'_bad.csv' )
-            pickle_file = os.path.join( result_dir,self.save_file_name+'.p' )
+        if leaf_seg_stack:
+            print('\nPostProcessing now!')
+            sum_stack, label_map_ws = postp.watershedSegStack(np.array(leaf_seg_stack), self.num_lesions,
+                                                              postprocess_dir, self.imageDF, start_image_df_idx)
+            self.imageDF = postp.processSegStack(np.array(leaf_seg_stack), leaf_img_stack, self.num_lesions, label_map_ws,
+                                  self.imageDF, start_image_df_idx, resize_ratio, postprocess_dir, imgsWLesions_dir)
 
             clean_df = self.imageDF.copy()
             for col in clean_df.columns:
                 if 'center' in str(col) or 'start' in str(col) or 'end' in str(col) or 'index' in str(col):
                     clean_df = clean_df.drop( columns=[col] )
 
-            csv_df = clean_df[df_index:df_index+1]
-            csv_df = csv_df.reset_index(drop=True)
-            #print('len(csv_df) :',len(csv_df))
-
-            reformatted_csv_df = csv_df
-            for i in range(self.num_lesions-1):
-                reformatted_csv_df = pd.concat([reformatted_csv_df,csv_df])
-            reformatted_csv_df = reformatted_csv_df.reset_index(drop=True)
-            reformatted_csv_df['Lesion Area Pixels'] = ''
-            reformatted_csv_df['Lesion #'] = ''
-            for i in range(self.num_lesions):
-                individual_lesion_area = csv_df.at[0,'l'+str(i+1)+'_area']
-                #print('individual_lesion_area :',individual_lesion_area)
-                reformatted_csv_df.at[int(i),'Lesion Area Pixels'] = individual_lesion_area
-                reformatted_csv_df.at[int(i),'Lesion #'] = int(i+1)
-            reformatted_csv_df['Adjusted Lesion Pixels'] = reformatted_csv_df['Lesion Area Pixels'] * reformatted_csv_df['ResizeRatio']
+            #csv_df = clean_df[df_index:df_index+1]
+            #csv_df = csv_df.reset_index(drop=True)
+            ##print('len(csv_df) :',len(csv_df))
+            #
+            #reformatted_csv_df = csv_df
+            #for i in range(self.num_lesions-1):
+            #    reformatted_csv_df = pd.concat([reformatted_csv_df,csv_df])
+            #reformatted_csv_df = reformatted_csv_df.reset_index(drop=True)
+            #reformatted_csv_df['Lesion Area Pixels'] = ''
+            #reformatted_csv_df['Lesion #'] = ''
+            #for i in range(self.num_lesions):
+            #    individual_lesion_area = csv_df.at[0,'l'+str(i+1)+'_area']
+            #    #print('individual_lesion_area :',individual_lesion_area)
+            #    reformatted_csv_df.at[int(i),'Lesion Area Pixels'] = individual_lesion_area
+            #    reformatted_csv_df.at[int(i),'Lesion #'] = int(i+1)
+            #reformatted_csv_df['Adjusted Lesion Pixels'] = reformatted_csv_df['Lesion Area Pixels'] * reformatted_csv_df['ResizeRatio']
 
             # TODO Add Lesion # Column
-            reformatted_csv_df = reformatted_csv_df[[
-                    'Image Name',
+            reformatted_csv_df = clean_df[[
+            #reformatted_csv_df = reformatted_csv_df[[
+                'Image Name',
                     'File Location',
                     'CameraID',
                     'Year',
@@ -925,52 +783,12 @@ class GUI(tk.Frame):
                     aaps[i] = 0
             reformatted_csv_df['Avg Adj Pixel Size'] = aaps
 
-
-
-
-            #postprocess_files = glob.glob(postprocess_slide_dir+'/*')
-            #postprocess_files = glob.glob(postprocess_dir+'/*')
-            #for f in postprocess_files:
-            #    if 'OSeg.png' not in f:
-            #        os.remove(f)
-
-            if file_started == False:
-                #csv_df.to_csv( result_file,index=False )
-                reformatted_csv_df.to_csv( result_file,index=False )
-                file_started = True
-            else:
-                #csv_df.to_csv( result_file,header=False,mode='a',index=False )
-                reformatted_csv_df.to_csv( result_file,header=False,mode='a',index=False )
-            #if df_index in self.good_df_indices:
-                #remove unneeded files for good runs here
-# Files to delete only if segmentation is Good:
-# patches/images/IMG_NAME/
-                #shutil.rmtree( os.path.join(resized_image_dir,slidename) )
-# masks/leaf_masks/IMG_NAME
-                #os.remove( os.path.join(leaf_mask_dir,('leaf_mask_'+slidename+'.png')) )
-# masks/lesion_masks/IMG_NAME/
-           #     shutil.rmtree( os.path.join(lesion_mask_dir,slidename) )
-# resultFiles/postprocessing/IMG_NAME/
-                #shutil.rmtree( postprocess_slide_dir )
-
-           #     if good_file_started == False:
-           #         csv_df.to_csv( result_file,index=False )
-           #         good_file_started = True
-           #     else:
-           #         csv_df.to_csv( result_file,header=False,mode='a',index=False )
-           # else:
-           #     if bad_file_started == False:
-           #         csv_df.to_csv( bad_result_file,index=False )
-           #         bad_file_started = True
-           #     else:
-           #         csv_df.to_csv( bad_result_file,header=False,mode='a',index=False )
-
+            reformatted_csv_df.to_csv( result_file,index=False )
 
         # remove the remaining directories that are only removed at the end of a full run
         shutil.rmtree( txt_dir )
         shutil.rmtree( log_dir )
 
-        #p.dump( self.imageDF,open(pickle_file,'wb') )
         print( '\n\tresult_file located :',result_file )
         print( '\n****************************************************************************' )
         print( '***********************************DONE*************************************' )
