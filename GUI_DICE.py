@@ -614,7 +614,6 @@ class GUI(tk.Frame):
         center_w = 0
         half_side = 0
         resize_ratio = 0
-        #goodPrevFound = False
         cams_completed = 1
         for df_index,df_row in self.imageDF.iterrows():
             if df_index % self.num_lesions != 0:
@@ -658,20 +657,10 @@ class GUI(tk.Frame):
                 leaf_img_stack = [resized_image]
                 leaf_seg_stack = []
                 leafMask = leaf_mask
-                #pla = 1600
-                #goodPrevFound = False
             else:
                 resized_image, normalized_image, leaf_mask, resize_ratio, = quick_process_tif(test_img_pth,patch_size,leafMask,center_h,center_w,half_side )
                 leaf_img_stack.append(resized_image)
                 print( 'Processing image :',filename )
-
-            #print('slidename + resized.png:',slidename)
-            #cv2.imwrite(slidename+'resized.png',resized_image)
-#            normalized_image = cv2.cvtColor(normalized_image,cv2.COLOR_BGR2RGB)
-            #rint('GUI - resized_image.shape :',resized_image.shape)
-            #print('GUI - resized_image.max :',np.max(resized_image))
-            #print('GUI - normalized_image.shape :',normalized_image.shape)
-            #print('GUI - normalized_image.max :',np.max(normalized_image))
 
             for k in range(self.num_lesions):
                 self.imageDF.at[ df_index+k,'ResizeRatio' ] = resize_ratio
@@ -683,12 +672,6 @@ class GUI(tk.Frame):
             h,w,c = normalized_image.shape
             input_image = np.zeros( (h,w,4) )
             input_image[:,:,:3] = normalized_image
-            #print('HERE 001')
-            #TODO add this back in once its tested and accounted for
-            # TODO it is adding the previous segmentations as an extra channel
-            #if self.goodSeg == True and self.imageDF.loc[df_index-1,'CameraID'] == self.imageDF.loc[df_index,'CameraID']:
-            #    input_image[:,:,3] = self.prevSegmentation
-            #print('HERE 002')
 
             preprocess_start_time = time.time()
             batch_time = AverageMeter()
@@ -719,71 +702,54 @@ class GUI(tk.Frame):
             self.imageDF = postp.processSegStack(np.array(leaf_seg_stack), leaf_img_stack, self.num_lesions, label_map_ws,
                                   self.imageDF, start_image_df_idx, resize_ratio, postprocess_dir, imgsWLesions_dir)
 
-            clean_df = self.imageDF.copy()
-            for col in clean_df.columns:
-                if 'center' in str(col) or 'start' in str(col) or 'end' in str(col) or 'index' in str(col):
-                    clean_df = clean_df.drop( columns=[col] )
+        clean_df = self.imageDF.copy()
+        for col in clean_df.columns:
+            if 'center' in str(col) or 'start' in str(col) or 'end' in str(col) or 'index' in str(col):
+                clean_df = clean_df.drop( columns=[col] )
 
-            #csv_df = clean_df[df_index:df_index+1]
-            #csv_df = csv_df.reset_index(drop=True)
-            ##print('len(csv_df) :',len(csv_df))
-            #
-            #reformatted_csv_df = csv_df
-            #for i in range(self.num_lesions-1):
-            #    reformatted_csv_df = pd.concat([reformatted_csv_df,csv_df])
-            #reformatted_csv_df = reformatted_csv_df.reset_index(drop=True)
-            #reformatted_csv_df['Lesion Area Pixels'] = ''
-            #reformatted_csv_df['Lesion #'] = ''
-            #for i in range(self.num_lesions):
-            #    individual_lesion_area = csv_df.at[0,'l'+str(i+1)+'_area']
-            #    #print('individual_lesion_area :',individual_lesion_area)
-            #    reformatted_csv_df.at[int(i),'Lesion Area Pixels'] = individual_lesion_area
-            #    reformatted_csv_df.at[int(i),'Lesion #'] = int(i+1)
-            #reformatted_csv_df['Adjusted Lesion Pixels'] = reformatted_csv_df['Lesion Area Pixels'] * reformatted_csv_df['ResizeRatio']
+        # TODO Add Lesion # Column
+        reformatted_csv_df = clean_df[[
+        #reformatted_csv_df = reformatted_csv_df[[
+            'Image Name',
+                'File Location',
+                'CameraID',
+                'Year',
+                'Month',
+                'Day',
+                'Hour',
+                'Innoc Year',
+                'Innoc Month',
+                'Innoc Day',
+                'Innoc Hour',
+                'Hours Elapsed',
+                'Lesion #',
+                'Lesion Area Pixels',
+                'ResizeRatio',
+                'Adjusted Lesion Pixels',
+                'Avg Adj Pixel Size',
+                'Camera #',
+                'Array #',
+                'Leaf #',
+                'Leaf Section #',
+                'Covariable 1',
+                'Covariable 2',
+                'Covariable 3',
+                'Covariable 4',
+                'Vector Name',
+                'Gene of Interest',
+                'Comments',
+                'Description']]
 
-            # TODO Add Lesion # Column
-            reformatted_csv_df = clean_df[[
-            #reformatted_csv_df = reformatted_csv_df[[
-                'Image Name',
-                    'File Location',
-                    'CameraID',
-                    'Year',
-                    'Month',
-                    'Day',
-                    'Hour',
-                    'Innoc Year',
-                    'Innoc Month',
-                    'Innoc Day',
-                    'Innoc Hour',
-                    'Hours Elapsed',
-                    'Lesion #',
-                    'Lesion Area Pixels',
-                    'ResizeRatio',
-                    'Adjusted Lesion Pixels',
-                    'Avg Adj Pixel Size',
-                    'Camera #',
-                    'Array #',
-                    'Leaf #',
-                    'Leaf Section #',
-                    'Covariable 1',
-                    'Covariable 2',
-                    'Covariable 3',
-                    'Covariable 4',
-                    'Vector Name',
-                    'Gene of Interest',
-                    'Comments',
-                    'Description']]
+        # Write zero to the Avg Adj Pixel Size column if it is equal to the prev lesion
+        # This happens when a bad segmentation occurs
+        aaps = reformatted_csv_df['Avg Adj Pixel Size']
+        for i in range(len(aaps)-1,self.num_lesions,-1):
+            j = i - self.num_lesions
+            if aaps[i] == aaps[j]:
+                aaps[i] = 0
+        reformatted_csv_df['Avg Adj Pixel Size'] = aaps
 
-            # Write zero to the Avg Adj Pixel Size column if it is equal to the prev lesion
-            # This happens when a bad segmentation occurs
-            aaps = reformatted_csv_df['Avg Adj Pixel Size']
-            for i in range(len(aaps)-1,self.num_lesions,-1):
-                j = i - self.num_lesions
-                if aaps[i] == aaps[j]:
-                    aaps[i] = 0
-            reformatted_csv_df['Avg Adj Pixel Size'] = aaps
-
-            reformatted_csv_df.to_csv( result_file,index=False )
+        reformatted_csv_df.to_csv( result_file,index=False )
 
         # remove the remaining directories that are only removed at the end of a full run
         shutil.rmtree( txt_dir )
