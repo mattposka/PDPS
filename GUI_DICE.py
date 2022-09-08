@@ -752,8 +752,8 @@ class GUI(tk.Frame):
         reformatted_csv_df.to_csv( result_file,index=False )
 
         # remove the remaining directories that are only removed at the end of a full run
-        shutil.rmtree( txt_dir )
-        shutil.rmtree( log_dir )
+        #shutil.rmtree( txt_dir )
+        #shutil.rmtree( log_dir )
 
         print( '\n\tresult_file located :',result_file )
         print( '\n****************************************************************************' )
