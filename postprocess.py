@@ -130,6 +130,7 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,starting_d
         for l in range(num_lesions):
                 area_str = 'Lesion #'
                 imageDF.at[df_index+l, area_str] = l+1
+                lesion_size = np.count_nonzero(np.where(curr_labels==l+1,l+1,0))
                 imageDF.at[df_index+l,'Lesion Area Pixels'] = lesion_size
                 imageDF.at[df_index+l, 'Adjusted Lesion Pixels'] = lesion_size * resize_ratio
                 lesion_total += lesion_size
