@@ -12,7 +12,6 @@ from skimage.morphology import closing, square
 from itertools import chain
 # MP added to test
 import cv2
-import matplotlib.pyplot as plt
 import scipy.stats as ss
 import pickle as p
 
@@ -72,7 +71,6 @@ def removeBackground(img):
     leaf_mask = np.where( labeled_mask==leaf_label,True,False )
 
     #maskpth = os.path.join( leaf_mask_dir,(filename.replace('.png','')+'_mask.png') )
-    #plt.imsave( maskpth,leaf_mask )
 
     #maskpth_p = maskpth.replace( '.png','.p' )
     #p.dump( leaf_mask,open(maskpth_p,'wb') )
@@ -213,7 +211,6 @@ def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
     leaf_mask = np.where( labeled_mask==leaf_label,True,False )
 
     #maskpth = os.path.join( leaf_mask_dir,(filename.replace('.png','')+'_mask.png') )
-    #plt.imsave( maskpth,leaf_mask )
 
     #maskpth_p = maskpth.replace( '.png','.p' )
     #p.dump( leaf_mask,open(maskpth_p,'wb') )

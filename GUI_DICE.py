@@ -49,12 +49,10 @@ from skimage.measure import label, regionprops
 from skimage.morphology import closing, square, remove_small_objects
 #from utils.postprocessing import CRFs
 #import scipy.stats as ss
-#import matplotlib.pyplot as plt
 #import pickle as p
 import datetime as dt
 import glob
 import warnings
-import matplotlib.pyplot as plt
 
 import shutil
 
@@ -132,7 +130,7 @@ class GUI(tk.Frame):
         self.modelTypeVar = tk.StringVar( self.modelFrame )
         self.modelTypeVar.set( 'LEAF_UNET_DICE_NOV21.pth' )
         models_available_list = self.getModelsAvailable()
-        self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelTypeVar,*models_available_list )
+        self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelFrame,self.modelTypeVar,*models_available_list )
         self.modelTypeMenu.grid( row=1,column=0 )
 
         self.modelFrame.grid_rowconfigure( (0,1),weight=1 )

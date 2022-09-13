@@ -9,30 +9,13 @@ import cv2
 import os
 import scipy.ndimage as ndi
 
-def saveOrigImg( postprocess_dir,slidename,resized_image ):
-    orig_img_pth = os.path.join(postprocess_dir, slidename + '_Original.png')
-    cv2.imwrite(orig_img_pth, resized_image)
-
-# remove lesion areas that are outside of the leaf mask
-def leafMaskFilter( new_props,labeled_img,leaf_mask ):
-    for i, reg in enumerate(new_props):
-        bb = reg.bbox #min_row,min_col,max_row,max_col
-        # [min,max) -> have to -1 to the max
-        corners = [[bb[0],bb[1]],
-                        [bb[0],bb[3]-1],
-                        [bb[2]-1,bb[1]],
-                        [bb[2]-1,bb[3]-1],
-                        ]
-        for c in corners:
-            if not leaf_mask[c[0],c[1]]:
-                labeled_img[labeled_img == reg.label] = 0
-    return labeled_img
-
 def watershedSegStack(seg_stack,num_lesions,postprocess_dir,imageDF,df_index):
 
     seg_stack = seg_stack.copy()
     imgs,rows,cols = seg_stack.shape
     sum_stack = np.sum(seg_stack,axis=(0)) / imgs
+
+    cam_num = imageDF.loc[df_index, 'CameraID']
 
     bin_img = np.where(sum_stack > 0, True, False)
     distance = ndi.distance_transform_edt(bin_img)
@@ -41,46 +24,36 @@ def watershedSegStack(seg_stack,num_lesions,postprocess_dir,imageDF,df_index):
     best_labels = None
     threshold = 1.0
     for i in range(20):
-        print('i :',i)
 
         threshold -= 0.05
         starting_regions = np.where(sum_stack >= threshold, 1, 0)
         labels = label(starting_regions)
 
-        cam_num = imageDF.loc[df_index, 'CameraID']
-        label_map_save_pth = os.path.join(postprocess_dir, 'cam' + str(cam_num) + 'label_map_T{}.png'.format(str(threshold)))
-        io.imsave(label_map_save_pth,
-                    label2rgb(labels, colors=['red', 'green', 'blue', 'purple', 'pink', 'black']))
+        label_map_save_pth = os.path.join(postprocess_dir, 'cam' + str(cam_num) + 'label_map_T{}.png'.format(str(int(threshold*100))))
+        cv2.imwrite(label_map_save_pth,255.0*label2rgb(labels, colors=['red', 'green', 'blue', 'purple', 'pink', 'black']))
 
         num_good_lesions_found = 0
         regions = regionprops(labels)
         for region in regions:
-            print('region.label :',region.label)
             # maybe use circularity as a filter too?
             #circularity = 4*np.pi*region.area / (region.perimeter * region.perimeter)
             x,y = region.centroid
             if region.area > 500:
-                if x > rows * 0.2 and x < rows * 0.8 and y > cols * 0.2 and y < cols * 0.8:
+                if x > rows * 0.1 and x < rows * 0.9 and y > cols * 0.1 and y < cols * 0.9:
                     num_good_lesions_found += 1
-                    print('num_good_lesions_found :',num_good_lesions_found)
                 else:
                     labels = np.where(labels==region.label,0,labels)
-                    print('removing label (not centered enough):',region.label)
-        print('num_good_lesions_found FINAL :', num_good_lesions_found)
         if num_good_lesions_found == num_lesions:
             best_labels = labels
-            print('Enough good lesions FOUND,BREAKING')
             break
         else:
             if num_good_lesions_found < min_lesions_over_threshold and num_good_lesions_found >= num_lesions:
                 min_lesions_over_threshold = num_good_lesions_found
-                print('Setting New best_labeles')
                 best_labels = labels
 
     labels = best_labels
     counts = []
     # regions doesn't include background
-    print('labels :',np.unique(labels))
     regions = regionprops(labels)
     for region in regions:
         counts.append([region.area,region.label])
@@ -97,13 +70,10 @@ def watershedSegStack(seg_stack,num_lesions,postprocess_dir,imageDF,df_index):
 
     label_map_ws = watershed(-distance, labels, mask=bin_img)
 
-    cam_num = imageDF.loc[df_index, 'CameraID']
     seg_stack_save_pth = os.path.join(postprocess_dir,'cam' + str(cam_num) + 'segstack.png')
     label_map_save_pth = os.path.join(postprocess_dir, 'cam' + str(cam_num) + 'label_map.png')
-    #cv2.imwrite( seg_stack_save_pth,gray2rgb(sum_stack) )
-    #cv2.imwrite( label_map_save_pth,label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']) )
-    io.imsave( seg_stack_save_pth,gray2rgb(sum_stack) )
-    io.imsave( label_map_save_pth,label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']) )
+    cv2.imwrite( seg_stack_save_pth,255.0*gray2rgb(sum_stack) )
+    cv2.imwrite( label_map_save_pth,255.0*label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']) )
 
     return sum_stack, label_map_ws
 
@@ -114,8 +84,7 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,starting_d
     first_seg = np.zeros((1,rows,cols))
     seg_stack = np.concatenate((first_seg,seg_stack),axis=0)
 
-    print('np.unique :', np.unique(labels_ws))
-    alpha = 1.0
+    alpha = 0.4
     for i in range(num_imgs):
         df_index = starting_df_index + i*num_lesions
 
@@ -123,34 +92,28 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,starting_d
         img_name = imageDF.loc[df_index,'Image Name']
         original_img = leaf_img.copy()
         original_seg = original_img.copy()
-        original_seg[:,:,2] = np.where(seg_stack[i+1,:,:]==1,255,0)
+        original_seg[:,:,0] = np.where(seg_stack[i+1,:,:]==1,255,0)
         original_seg[:,:,1] = np.where(original_seg[:,:,2]==255,0,original_seg[:,:,1])
-        original_seg[:,:,0] = np.where(original_seg[:,:,2]==255,0,original_seg[:,:,0])
-        orig_seg_img = cv2.addWeighted(original_img,alpha,original_seg,alpha,0.0)
+        original_seg[:,:,2] = np.where(original_seg[:,:,0]==255,0,original_seg[:,:,0])
+        orig_seg_img = cv2.addWeighted(original_img,1-alpha,original_seg,alpha,0.0)
         orig_seg_img_pth = os.path.join(postprocess_dir, img_name.replace('.png','') + '_OSeg.png')
         cv2.imwrite(orig_seg_img_pth,orig_seg_img)
-        #io.imsave(orig_seg_img_pth,orig_seg_img)
 
         # current image is the previous segmentation AND the current segmentation
         # so that lesions don't randomly disappear
         continuous_seg = seg_stack[i+1,:,:] + seg_stack[i,:,:]
         curr_labels = np.where(continuous_seg>0, labels_ws, 0)
-        seg_image = label2rgb(curr_labels,colors=['red','green','blue','purple','pink','black'])
-        seg_image_mask = np.where(seg_image > 0, seg_image, 0)
+        seg_image = 255.0*label2rgb(curr_labels,colors=['red','green','blue','purple','pink','black'])
 
-        overlay = leaf_img.copy()
-        print('overlay.shape :',overlay.shape)
-        overlay[:,:,0] = np.where(seg_image_mask[:,:,0]>0,seg_image[:,:,0],overlay[:,:,0])
-        overlay[:,:,1] = np.where(seg_image_mask[:,:,1]>0,seg_image[:,:,1],overlay[:,:,1])
-        overlay[:,:,2] = np.where(seg_image_mask[:,:,2]>0,seg_image[:,:,2],overlay[:,:,2])
+        seg_image_mask = np.sum(seg_image,axis=2,keepdims=True)
+        seg_image_mask = np.where(seg_image_mask>0,1,0)
+
+        overlay = np.where(seg_image_mask==1,seg_image,leaf_img)
         overlay = np.array(overlay,dtype='float32')
-        overlay_pth = os.path.join(imgsWLesions_dir, img_name.replace('.png','_overlay.png'))
-        cv2.imwrite(overlay_pth,overlay)
 
-        img_w_lesions = cv2.addWeighted(leaf_img,alpha,overlay,alpha,0.0)
+        img_w_lesions = cv2.addWeighted(leaf_img,1-alpha,overlay,alpha,0.0)
         img_w_lesions_pth = os.path.join(imgsWLesions_dir, img_name.replace('.png','_lesions.png'))
         cv2.imwrite(img_w_lesions_pth,img_w_lesions)
-        #io.imsave(img_w_lesions_pth,img_w_lesions)
 
         lesion_total = 0
         for l in range(num_lesions):
