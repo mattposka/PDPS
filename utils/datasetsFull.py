@@ -7,7 +7,6 @@ import torchvision.transforms as transforms
 from PIL import Image
 import torchvision.transforms.functional as F
 import random
-import matplotlib.pyplot as plt
 
 
 class LEAFTrain(data.Dataset):

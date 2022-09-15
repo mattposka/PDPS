@@ -1,3 +1,6 @@
+Aug31_data*
+default*
+*.npy
 pytorch_models/*.pth
 *.pth
 __pycache__/
