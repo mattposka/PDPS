@@ -1,3 +1,9 @@
+.ipynob_checkpoints/
+.idea\
+*.swp
+Brown Annotations\
+o_seg_imgs\
+
 Aug31_data*
 default*
 *.npy
