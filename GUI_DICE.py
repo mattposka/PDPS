@@ -11,7 +11,7 @@ from operator import itemgetter
 import pandas as pd
 from openpyxl import load_workbook
 import os
-#from leaf_divide_testCircle import process_tif
+
 from preprocess import process_tif, quick_process_tif
 import numpy as np
 import time
@@ -20,9 +20,6 @@ from torch.utils import data
 #from utils.datasets import LEAFTest
 from utils.datasetsFull import LEAFTest
 import postprocess as postp
-
-#from model.u_net import UNet
-#from model.u_net2 import UNet2
 
 import model.u_net as u_net
 import model.u_net2 as u_net2
@@ -36,20 +33,12 @@ import model.u_netDICE as u_netDICE
 import model.u_netDICE_Erode_Run as u_netDICE_Erode_Run
 
 import torch.nn as nn
-#from merge_npz_final import merge_npz
-#from merge_npz_finalFull import merge_npz
-#from scipy.sparse import load_npz, save_npz, csr_matrix, coo_matrix
-#from scipy.misc import imread, imsave
 import imageio as io
-#import scipy.misc as spm
 from PIL import Image
 from utils.transforms import vl2im, im2vl
 from skimage import filters
 from skimage.measure import label, regionprops
 from skimage.morphology import closing, square, remove_small_objects
-#from utils.postprocessing import CRFs
-#import scipy.stats as ss
-#import pickle as p
 import datetime as dt
 import glob
 import warnings
@@ -399,27 +388,9 @@ class GUI(tk.Frame):
 
     # Formats the original dataframe based off of the images selected
     def formatDF( self, ):
-        #for i in range( self.num_lesions ):
-            #area_str = 'l'+str(i+1)+'_area'
-#           # radius_str = 'l'+str(i)+'_radius'
-            #cenX_str = 'l'+str(i+1)+'_centerX'
-            #cenY_str = 'l'+str(i+1)+'_centerY'
-            #startX_str = 'l'+str(i+1)+'_xstart'
-            #startY_str = 'l'+str(i+1)+'_xend'
-            #endX_str = 'l'+str(i+1)+'_ystart'
-            #endY_str = 'l'+str(i+1)+'_yend'
-            #self.imageDF[ area_str ] = ''
-#           # self.imageDF[ radius_str ] = ''
-            #self.imageDF[ cenX_str ] = ''
-            #self.imageDF[ cenY_str ] = ''
-            #self.imageDF[ startX_str ] = ''
-            #self.imageDF[ startY_str] = ''
-            #self.imageDF[ endX_str ] = ''
-            #self.imageDF[ endY_str ] = ''
         description = self.e1.get('1.0', END)
         self.imageDF['Avg Adj Pixel Size'] = ''
         self.imageDF['Description'] = description
-
 
         innoc_year = int( self.innocYearTimeVar.get() )
         innoc_month = int( self.innocMonthTimeVar.get() )
@@ -488,25 +459,6 @@ class GUI(tk.Frame):
                 self.imageDF.at[df_row,'Gene of Interest' ] = mFile_row_ri.at[0,'Gene of Interest']
                 self.imageDF.at[df_row,'Comments' ] = mFile_row_ri.at[0,'Comments']
 
-
-    #TODO maybe this can be moved to the postProcessing.py file
-    # draw rectangles around the lesions
-    def drawRecsAndSaveImg( self,contours_reordered,im_to_write,imgsWLesions_dir,df_index ):
-        for j in range( len(contours_reordered) ):
-            if contours_reordered[j,7] > 0:
-                cv2.putText(im_to_write, str(j+1), (int(contours_reordered[j,5]), int(contours_reordered[j,6])), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 0), 1)
-                start = (int(contours_reordered[j,1]),int(contours_reordered[j,2]))
-                end = (int(contours_reordered[j,3]),int(contours_reordered[j,4]))
-                color = (0,255,0)
-                thickness = 2
-                cv2.rectangle( im_to_write,start,end,color,thickness )
-        img_sav_pth = os.path.join( imgsWLesions_dir,self.imageDF.loc[df_index,'Image Name'] )
-        cv2.imwrite( img_sav_pth,im_to_write )
-
-    def addLesionNumberCol( self, ):
-        return
-
-
     #TODO Test what n does
     def process(self,n=''):
 
@@ -555,7 +507,6 @@ class GUI(tk.Frame):
         if not os.path.exists(imgsWLesions_dir):
             os.makedirs(imgsWLesions_dir)
 
-        # make directory to hold pytorch models
         model_dir = os.path.join( 'pytorch_models' )
         if not os.path.exists( model_dir ):
             os.makedirs( model_dir )
@@ -576,11 +527,7 @@ class GUI(tk.Frame):
         modelname = self.modelTypeVar.get()
         patch_size = 512
 
-        #IMG_MEAN = np.array((62.17962105572224, 100.62603236734867, 131.60830906033516), dtype=np.float32)
         IMG_MEAN = np.array((128.95671, 109.307915, 96.25992), dtype=np.float32) # R G B
-
-        file_started = False
-        self.goodSeg = False
 
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print( '\tUsing device:',device )
@@ -597,9 +544,6 @@ class GUI(tk.Frame):
         model.to(device)
         saved_state_dict = torch.load(RESTORE_FROM, map_location=lambda storage, loc: storage)
 
-        #num_examples = saved_state_dict['example']
-#           print("\tusing running mean and running var")
-            #log.writelines("using running mean and running var\n")
         model.load_state_dict(saved_state_dict['state_dict'])
         model.eval()
 
@@ -617,14 +561,8 @@ class GUI(tk.Frame):
             if df_index % self.num_lesions != 0:
                 continue
 
-            #test_img_pth = imagelst[0] # full path and  name of the image, but starts with a '/'
             test_img_pth = df_row[ 'File Location' ]
             filename = test_img_pth.split('/')[-1] # name of the image
-            slidename = filename[:-4] # slidename is just the name of the image w/o extension
-            #TODO can I replace slidename with imageName?
-
-            log = open(log_pth, 'w')
-            log.write(test_img_pth + '\n')
 
             # image_fg_size is the size of the side of the square containing the entire unresized leaf
             # save this number for later use when to determine the actual size of all of the lesions later
@@ -663,19 +601,12 @@ class GUI(tk.Frame):
             for k in range(self.num_lesions):
                 self.imageDF.at[ df_index+k,'ResizeRatio' ] = resize_ratio
 
-            #print('np.max(normalized_image) :',np.max(normalized_image) )
-            #print('np.min(normalized_image) :',np.min(normalized_image) )
-
             # Add 4th channel (blank or prev_segmentation)
             h,w,c = normalized_image.shape
             input_image = np.zeros( (h,w,4) )
             input_image[:,:,:3] = normalized_image
 
-            preprocess_start_time = time.time()
-            batch_time = AverageMeter()
             with torch.no_grad():
-                end = time.time()
-                    
                 formatted_img = np.transpose(input_image,(2,0,1)) # transpose because channels first
 
                 formatted_img = formatted_img.astype(np.float32)
@@ -685,13 +616,9 @@ class GUI(tk.Frame):
                 msk = torch.squeeze(output).data.cpu().numpy()
                 msk = np.where(msk>0,1,0)
 
-                batch_time.update(time.time() - end)
-                end = time.time()
-
-#####################################################################################################################
-#####################################################################################################################
-
             leaf_seg_stack.append(msk)
+#####################################################################################################################
+#####################################################################################################################
 
         if leaf_seg_stack:
             print('\nPostProcessing now!')
@@ -701,9 +628,6 @@ class GUI(tk.Frame):
                                   self.imageDF, start_image_df_idx, resize_ratio, postprocess_dir, imgsWLesions_dir)
 
         clean_df = self.imageDF.copy()
-        for col in clean_df.columns:
-            if 'center' in str(col) or 'start' in str(col) or 'end' in str(col) or 'index' in str(col):
-                clean_df = clean_df.drop( columns=[col] )
 
         # TODO Add Lesion # Column
         reformatted_csv_df = clean_df[[
@@ -748,10 +672,6 @@ class GUI(tk.Frame):
         reformatted_csv_df['Avg Adj Pixel Size'] = aaps
 
         reformatted_csv_df.to_csv( result_file,index=False )
-
-        # remove the remaining directories that are only removed at the end of a full run
-        #shutil.rmtree( txt_dir )
-        #shutil.rmtree( log_dir )
 
         print( '\n\tresult_file located :',result_file )
         print( '\n****************************************************************************' )
