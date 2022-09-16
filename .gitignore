@@ -1,8 +1,8 @@
-.ipynob_checkpoints/
-.idea\
+.ipynb_checkpoints/
+.idea/
 *.swp
-Brown Annotations\
-o_seg_imgs\
+Brown Annotations/
+o_seg_imgs/
 
 Aug31_data*
 default*
