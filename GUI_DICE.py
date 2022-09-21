@@ -5,7 +5,6 @@ from tkinter.ttk import *
 import tkinter.font as tkFont
 from tkinter import filedialog
 
-import skimage.measure
 from PIL import ImageTk
 from operator import itemgetter
 import pandas as pd
@@ -14,7 +13,6 @@ import os
 
 from preprocess import process_tif, quick_process_tif
 import numpy as np
-import time
 import torch
 from torch.utils import data
 #from utils.datasets import LEAFTest
@@ -382,7 +380,6 @@ class GUI(tk.Frame):
         self.imageDF = self.imageDF.sort_values( by=['CameraID','Year','Month','Day','Hour'] )
         self.imageDF['index_num'] = np.arange( len(self.imageDF) )
         self.imageDF = self.imageDF.reset_index(drop=True)
-        #print( 'self.imageDF :',self.imageDF)
         imagelst = self.imageDF['File Location']
         return imagelst
 
@@ -423,6 +420,7 @@ class GUI(tk.Frame):
 
     def readMetaFile( self, ):
         mFile_name = str(self.metaFile)
+        mFile_Found = False
         if mFile_name != '' and mFile_name != 'None':
             mFile = pd.read_excel(mFile_name,engine='openpyxl')
             mFile_Found = True
@@ -492,12 +490,6 @@ class GUI(tk.Frame):
         postprocess_dir = os.path.join( root_dir,'postprocessing' )
         if not os.path.exists( postprocess_dir ):
             os.makedirs( postprocess_dir )
-
-        log_dir = os.path.join( root_dir,'log' )
-        if not os.path.exists( log_dir ):
-            os.makedirs( log_dir )
-
-        log_pth = os.path.join( log_dir,'log.log' )
 
         txt_dir = os.path.join( root_dir,'txt' )
         if not os.path.exists(txt_dir):
@@ -662,16 +654,7 @@ class GUI(tk.Frame):
                 'Comments',
                 'Description']]
 
-        # Write zero to the Avg Adj Pixel Size column if it is equal to the prev lesion
-        # This happens when a bad segmentation occurs
-        aaps = reformatted_csv_df['Avg Adj Pixel Size']
-        for i in range(len(aaps)-1,self.num_lesions,-1):
-            j = i - self.num_lesions
-            if aaps[i] == aaps[j]:
-                aaps[i] = 0
-        reformatted_csv_df['Avg Adj Pixel Size'] = aaps
-
-        reformatted_csv_df.to_csv( result_file,index=False )
+        reformatted_csv.to_csv( result_file,mode='a',header=not os.path.exists(result_file,index=False))
 
         print( '\n\tresult_file located :',result_file )
         print( '\n****************************************************************************' )
