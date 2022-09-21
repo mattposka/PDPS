@@ -19,11 +19,12 @@ from utils.datasetsCircle import LEAFTrain
 #from model.u_net import UNet
 #from model.u_net2 import UNet
 from model.u_net572 import UNet
-from model.u_netFull512 import UNetFull512
-from model.u_netFull512_Dilated import UNetFull512_Dilated
-from model.u_netCircle import UNetCircle
+#from model.u_netFull512 import UNetFull512
+#from model.u_netFull512_Dilated import UNetFull512_Dilated
+#from model.u_netCircle import UNetCircle
 from model.u_netDICE import UNetDICE
-from model.u_netFull512_Simple import UNetFull512_Simple
+#from model.u_netDICE_Erode import UNetDICE_Erode
+#from model.u_netFull512_Simple import UNetFull512_Simple
 import timeit
 import math
 from tensorboardX import SummaryWriter
@@ -43,9 +44,9 @@ BATCH_SIZE = 6
 MAX_EPOCH = 200
 #MAX_EPOCH = 500
 GPU = "2"
-root_dir = '/data/leaf_train/green/Sep2021/'
-DATA_LIST_PATH = root_dir + 'Circle/train.txt'
-VAL_LIST_PATH = root_dir + 'Circle/validation.txt'
+root_dir = '/data/leaf_train/brown/Sep22/'
+DATA_LIST_PATH = root_dir + 'Full/train.txt'
+VAL_LIST_PATH = root_dir + 'Full/validation.txt'
 INPUT_SIZE = '512,512'
 LEARNING_RATE = 2.5 * 10 ** (-4)
 MOMENTUM = 0.9
@@ -61,10 +62,10 @@ RANDOM_SEED = 1234
 #RESTORE_FROM = "/data/leaf_train/green/feb2021/PatchNet/snapshots-fb/LEAF_UNET_B0008_S052500.pth"
 #RESTORE_FROM = "/data/leaf_train/green/feb2021/PatchNet/snapshots-fb/LEAF_UNET_572_Apr2.pth"
 #TODO
-RESTORE_FROM = ''
+RESTORE_FROM = '/home/mjp5595/leaf_seg/pytorch_models/LEAF_UNET_SDL.pth'
 SAVE_PRED_EVERY = 50
-SNAPSHOT_DIR = root_dir + 'PatchNet/snapshotsCircle_Sep3'+postfix
-IMGSHOT_DIR = root_dir + 'PatchNet/imgshots2'+postfix
+SNAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Sep22_Brown'+postfix
+IMGSHOT_DIR = root_dir + 'PatchNet/imgshots_Sep22_Brown'+postfix
 WEIGHT_DECAY = 0.0005
 NUM_EXAMPLES_PER_EPOCH = 1016
 NUM_STEPS_PER_EPOCH = math.ceil(NUM_EXAMPLES_PER_EPOCH / float(BATCH_SIZE))
@@ -230,6 +231,7 @@ def main():
     #model = UNetFull512_Simple(args.num_classes)
     #model = UNetCircle(args.num_classes)
     model = UNetDICE(args.num_classes)
+    #model = UNetDICE_Erode(args.num_classes)
     model = torch.nn.DataParallel(model)
 
     optimizer = optim.SGD(model.parameters(),
@@ -318,6 +320,8 @@ def main():
     actual_step = args.start_step
     val_loss_list = []
     train_loss_list = []
+    val_acc_list = []
+    train_acc_list = []
     while actual_step < args.final_step:
         #print('here2')
         iter_end = timeit.default_timer()
@@ -355,15 +359,16 @@ def main():
             #print('predLoss.shape :',pred.shape )
             #print('labelsLoss.shape :',labels.shape )
             lossSDL = criterionSDL(pred, labels)
-            #lossBCE = loss_calc(pred,labels,class_weight)
+            lossBCE = loss_calc(pred,labels,class_weight)
 
 #TODO add back in later for erosion
 #############################################################################################
-            #lb,lh,lw = labels.shape
-            #labelsErode = labels.reshape(lb,1,lh,lw)
-            ##labelsErode = K.image_to_tensor(labelsErode,keepdim=False)
+            lb,lh,lw = labels.shape
+            labelsErode = labels.reshape(lb,1,lh,lw)
+            #labelsErode = K.image_to_tensor(labelsErode,keepdim=False)
             ##print('labelsErode0.shape :',labelsErode.shape)
-            #kernelL = torch.tensor([[1,1,1],[1,1,1],[1,1,1]])
+            kernelL = torch.tensor([[1,1,1],[1,1,1],[1,1,1]])
+            #print('labelsErode.shape :',labelsErode.shape)
             #for i in range(6):
             #    labelsErode = morph.erosion(labelsErode,kernelL)
             #labelsErode = labelsErode
@@ -375,6 +380,9 @@ def main():
 
             #loss_total = lossSDL + lossSDLErode + 5*lossBCE + 5*lossBCEErode
             loss_total = lossSDL
+            #loss_total = lossSDL + lossSDLErode
+            #loss_total = lossBCE + lossBCEErode
+            #loss_total = lossBCE
 
             #loss = loss_calc(pred, labels, class_weight)
             losses.update(loss_total.item(), pred.size(0))
@@ -399,15 +407,42 @@ def main():
                         #val_pred,val_predErode = model(val_images)
                         val_pred = model(val_images)
                         val_image = val_images.data.cpu().numpy()[0]
+
                         val_labels = resize_target(val_labels, val_pred.size(2))
 
+                        kernelL = torch.tensor([[1,1,1],[1,1,1],[1,1,1]])
+
+                        vlb,vlh,vlw = val_labels.shape
+                        #val_labelsErode = val_labels.reshape(vlb,1,vlh,vlw)
+
+                        #print('val_labelsErode.shape :',val_labelsErode.shape)
+                        #for i in range(6):
+                        #    val_labelsErode = morph.erosion(val_labelsErode,kernelL)
+                        #val_labelsErode = val_labelsErode
+                        #val_labelsErode = torch.reshape(val_labelsErode,(vlb,vlh,vlw))
+
                         #v_loss = loss_calc(val_pred, val_labels, class_weight)
-                        criterionSDL = SoftDiceLoss().cuda() # to put on cuda or cpu
+                        #criterionSDL = SoftDiceLoss().cuda() # to put on cuda or cpu
                         # In the training loop
-                        v_loss = criterionSDL(val_pred, val_labels)
+
+                        v_lossSDL = criterionSDL(val_pred, val_labels)
+                        #v_lossSDLErode = criterionSDL(val_predErode,val_labelsErode)
+
+                        #v_lossBCE = loss_calc(val_pred,val_labels,class_weight)
+                        #v_lossBCEErode = loss_calc(val_predErode,val_labelsErode,class_weight)
+
+                        #v_loss = v_lossBCE
+                        #v_loss = v_lossBCE + v_lossBCEErode
+                        #v_loss = v_lossSDL + v_lossSDLErode
+                        v_loss = v_lossSDL
                         val_loss += v_loss.item()
+
+                        val_acc = _pixel_accuracy(val_pred.cpu().numpy(), val_labels.data.cpu().numpy())
+                        
                 val_loss_list.append(val_loss)
                 train_loss_list.append(losses.val)
+                val_acc_list.append(val_acc)
+                train_acc_list.append(accuracy.val)
                 
                 #if len(val_loss_list) > EPOCHS_BEFORE_STOPPING:
                 #    if val_loss_list[-1] > val_loss_list[-1*(EPOCHS_BEFORE_STOPPING+1)]:
@@ -430,6 +465,16 @@ def main():
                 writer.add_scalar("train_loss", losses.avg, actual_step)
                 writer.add_scalar("pixel_accuracy", accuracy.avg, actual_step)
                 writer.add_scalar("lr", optimizer.param_groups[0]['lr'], actual_step)
+
+                val_loss_list_array = np.array(val_loss_list)
+                train_loss_list_array = np.array(train_loss_list)
+                val_acc_list_array = np.array(val_acc_list)
+                train_acc_list_array = np.array(train_acc_list)
+
+                np.savetxt(args.snapshot_dir+'val_loss_log.txt',val_loss_list_array)
+                np.savetxt(args.snapshot_dir+'train_loss_log.txt',train_loss_list_array)
+                np.savetxt(args.snapshot_dir+'val_acc_log.txt',val_acc_list_array)
+                np.savetxt(args.snapshot_dir+'train_acc_log.txt',train_acc_list_array)
 
 
             if actual_step % args.save_img_freq == 0:
@@ -480,11 +525,6 @@ def main():
                osp.join(args.snapshot_dir,
                         'LEAF_UNET_B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '_FINAL.pth'))
 
-    val_loss_list = np.array(val_loss_list)
-    train_loss_list = np.array(train_loss_list)
-
-    np.savetxt(args.snapshot_dir+'val_loss_log.txt',val_loss_list)
-    np.savetxt(args.snapshot_dir+'train_loss_log.txt',train_loss_list)
     end = timeit.default_timer()
     print(end - start, 'seconds')
 
