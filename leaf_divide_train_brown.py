@@ -3,81 +3,19 @@
 # Author: Haomiao Ni
 
 import os
-import os.path as osp
-from skimage import filters
 from skimage.measure import label, regionprops
 from skimage.morphology import closing, square
 import numpy as np
-from time import time
-from PIL import Image
 import threading
-from scipy.sparse import coo_matrix
-import scipy
 from utils.transforms import im2vl
-from utils.mk_datasets import test_imgs_list
 from itertools import chain
-
-from skimage.measure import label, regionprops
-from skimage.morphology import closing, square
 
 import scipy.stats as ss
 import cv2
 import glob
 
-def process_tif( file,patch_size,mean=np.array((128,128,128)) ):
-    filename = file.split('/')[-1]
-    #print( '\nPreprocessing',filename )
-    start = time()
 
-    img = cv2.imread(file)
-
-    r,c,_ = img.shape
-    square_size = np.min([r,c])
-    ss2 = square_size/2
-    r2 = r/2
-    rs = int(r2-ss2)
-    re = int(r2+ss2)
-    c2 = c/2
-    cs = int(c2-ss2)
-    ce = int(c2+ss2)
-    img = img[rs:re,cs:ce]
-    img = cv2.resize(img,(patch_size,patch_size))
-    resized_img = img
-
-    #TODO check that this works
-    #print('mean :',mean)
-    r = mean[0]
-    g = mean[1]
-    b = mean[2]
-    bgr_mean = np.array((b,g,r))
-    normalized_img = img - mean
-    normalized_img = normalized_img / mean
-
-    #imgpath = os.path.join(resized_image_dir, filename[:-4])
-    #if not os.path.exists(imgpath):
-    #    os.mkdir(imgpath)
-    #imagename = os.path.join(imgpath, filename[:-4] + '_Full.jpg')
-    #cv2.imwrite(imagename, img)
-
-
-    #maskpth = os.path.join( leaf_mask_dir,(filename.replace('.png','')+'_mask.png') )
-    #plt.imsave( maskpth,leaf_mask )
-
-    #maskpth_p = maskpth.replace( '.png','.p' )
-    #p.dump( leaf_mask,open(maskpth_p,'wb') )
-
-    stop = time()
-    #print('\tPreprocessing time : ' + str(stop - start))
-    log.writelines('processing time : ' + str(stop - start) + '\n')
-
-    return resized_img,normalized_img,leaf_mask
-
-# the main program of dividing leaf
-def process_tumor_tif(file, filename, labelfile, images, labels, isValid, log, rgb_sum, tumorname):
-    start = time()
-    saveNormal = True
-
-    img = cv2.imread(file)
+def makeSquare(img):
     datatype = img.dtype
     r,c,chans = img.shape
     orig_r,orig_c,chans = img.shape
@@ -90,14 +28,11 @@ def process_tumor_tif(file, filename, labelfile, images, labels, isValid, log, r
         img_square = np.zeros((c,c,chans),dtype=datatype)
         diff = c - r
         img_square[int(diff/2):-int(diff/2),:,:] = img
-    img = img_square
-    print('img.shape :',img.shape)
+    return img_square
 
-##################################################################################################
-# From process_tif - Get the background
-##################################################################################################
+def getLeafMask(img):
     # HSV is Hue[0,179], Saturation[0,255], Value[0,255]
-    hsv_img = cv2.cvtColor( img,cv2.COLOR_BGR2HSV )
+    hsv_img = cv2.cvtColor( img,cv2.COLOR_RGB2HSV )
     hue = hsv_img[:,:,0]
     sat = hsv_img[:,:,1]
     val = hsv_img[:,:,2]
@@ -117,15 +52,13 @@ def process_tumor_tif(file, filename, labelfile, images, labels, isValid, log, r
     mode_label,count = ss.mode( labeled_mask_filtered,axis=None,nan_policy='omit' )
     leaf_label = mode_label
     leaf_mask = np.where( labeled_mask==leaf_label,True,False )
-##################################################################################################
-# Resize Image to remove as much background as possible
-    r,c = leaf_mask.shape
-    print('leaf_mask.shape :',leaf_mask.shape)
+    return leaf_mask
 
+def getCropBounds(leaf_mask):
+    r,c = leaf_mask.shape
     left_cut = 0
     right_cut = 0
     column_sum = np.sum(leaf_mask,axis=0)
-    print('column_sum.shape :',column_sum.shape)
     for i in range(c):
         if column_sum[i] > 0:
             left_cut = max(0,i-1)
@@ -137,7 +70,6 @@ def process_tumor_tif(file, filename, labelfile, images, labels, isValid, log, r
     top_cut = 0
     bot_cut = 0
     row_sum = np.sum(leaf_mask,axis=1)
-    print('row_sum.shape :',row_sum.shape)
     for i in range(r):
         if row_sum[i] > 0:
             top_cut = max(0,i-1)
@@ -146,227 +78,146 @@ def process_tumor_tif(file, filename, labelfile, images, labels, isValid, log, r
         if row_sum[i-1] > 0:
             bot_cut = i
             break
-   
-    #img = img[top_cut:bot_cut,left_cut:right_cut,:]
-    #leaf_mask = leaf_mask[top_cut:bot_cut,left_cut:right_cut]
-    print('leaf_mask.shape :',leaf_mask.shape)
-    #r,c = leaf_mask.shape
-    #for i in range(r):
-    #    for j in range(c):
-    #        if leaf_mask[i,j] == False:
-    #            img[i,j,:] = 0
-##################################################################################################
+    return left_cut,right_cut,top_cut,bot_cut
 
+def getCropBoundsSquare(left_cut,right_cut,top_cut,bot_cut):
     height = bot_cut - top_cut
     width = right_cut - left_cut 
-    print('height :',height)
-    print('width :',width)
 
-    r,c,_ = img.shape
     square_size = max(height,width)
-    ss2 = int(square_size / 2)
-    r2 = int(top_cut + height / 2)
-    c2 = int(left_cut + width / 2)
-    print('r2 :',r2)
-    print('c2 :',c2)
-    print('ss2 :',ss2)
-    img = img[r2-ss2:r2+ss2,c2-ss2:c2+ss2]
-    leaf_mask = leaf_mask[r2-ss2:r2+ss2,c2-ss2:c2+ss2]
-    r,c = leaf_mask.shape
-    print('leaf_mask.shape :',leaf_mask.shape)
+    half_side = int(square_size / 2)
+    row_mid = int(top_cut + height / 2)
+    col_mid = int(left_cut + width / 2)
+    return half_side,row_mid,col_mid
+
+def cropSquare(img,half_side,row_mid,col_mid):
+    return img[row_mid-half_side:row_mid+half_side,col_mid-half_side:col_mid+half_side]
+
+def rmBackground(img,mask):
+    r,c = mask.shape
     for i in range(r):
         for j in range(c):
-            if leaf_mask[i,j] == False:
+            if mask[i,j] == False:
                 img[i,j,:] = 0
+    return img
 
-    img = cv2.resize(img,(512,512))
-
-    img_rgb = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
-    print( 'img_rgb.shape :',img_rgb.shape )
-    tot_r = np.sum(img_rgb[:,:,0])
-    tot_g = np.sum(img_rgb[:,:,1])
-    tot_b = np.sum(img_rgb[:,:,2])
-    mean_r = tot_r/(512*512)
-    mean_g = tot_g/(512*512)
-    mean_b = tot_b/(512*512)
-    print('mr,mg,mb :',mean_r,mean_g,mean_b)
-    rgb_sum += np.array((mean_r,mean_g,mean_b))
-
-
-    label_img = scipy.misc.imread(labelfile)
-    label_img = label_img[:,:,:3]
-    label_img = cv2.resize(label_img,(orig_r,orig_c))
-
-    r,c,chans = label_img.shape
-    label_square = None
-    if r > c:
-        label_square = np.zeros((r,r,chans))
-        diff = r - c
-        label_square[:,int(diff/2):-int(diff/2),:] = label_img
-    else:
-        label_square = np.zeros((c,c,chans))
-        diff = c - r
-        label_square[int(diff/2):-int(diff/2),:,:] = label_img
-    label_img = label_square
-    print('label_img.shape :',label_img.shape)
-##################################################################################################
-    #label_img = label_img[top_cut:bot_cut,left_cut:right_cut]
-##################################################################################################
-
-    #r,c,_ = label_img.shape
-    #square_size = np.max([r,c])
-    #ss2 = square_size/2
-    #r2 = r/2
-    #rs = int(r2-ss2)
-    #re = int(r2+ss2)
-    #c2 = c/2
-    #cs = int(c2-ss2)
-    #ce = int(c2+ss2)
-    #label_img = label_img[rs:re,cs:ce]
-    label_img = label_img[r2-ss2:r2+ss2,c2-ss2:c2+ss2]
-
-    label_img = scipy.misc.imresize(label_img, (512,512) )
-
-    # im2vl transforms label_img to 1s and 0s instead of 3d 0-255 values
-    label_img = im2vl(label_img)
+def setEdgesToZero(label_img):
     label_img[:1,:] = 0
     label_img[-1:,:] = 0
     label_img[:,:1] = 0
     label_img[:,-1:] = 0
+    return label_img
 
+# the main program of dividing leaf
+def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image_dir, label_dir, vimage_dir, vlabel_dir ):
 
-    if isValid == False:
-        imagename = os.path.join(Tumordir, filename[:-4] + '_Full.jpg')
-        cv2.imwrite(imagename,img)
+    img = cv2.imread(imgfile)
+    img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+    orig_r,orig_c,chans = img.shape
 
+    # Lode labeled img and resize to same size as input image
+    label_img = cv2.imread(labelfile)
+    label_img = label_img[:,:,:3]
+    label_img = cv2.resize(label_img,(orig_r,orig_c))
+
+    # Make image square
+    img = makeSquare(img)
+    label_img = makeSquare(label_img)
+    #print('img.shape :',img.shape)
+
+    leaf_mask = getLeafMask(img)
+    #print('leaf_mask.shape :',leaf_mask.shape)
+
+    left_cut,right_cut,top_cut,bot_cut = getCropBounds(leaf_mask)
+    half_side,row_mid,col_mid = getCropBoundsSquare(left_cut,right_cut,top_cut,bot_cut)
+
+    img = cropSquare(img,half_side,row_mid,col_mid)
+    label_img = cropSquare(img,half_side,row_mid,col_mid)
+    leaf_mask = cropSquare(leaf_mask,half_side,row_mid,col_mid)
+
+    img = rmBackground(img,leaf_mask)
+
+    img = cv2.resize(img,(512,512))
+    label_img = cv2.resize(label_img,(512,512))
+
+    # im2vl transforms label_img to 1s and 0s instead of 3d 0-255 values
+    label_img = im2vl(label_img)
+    label_img = setEdgesToZero(label_img)
+
+    image_name = None
+    label_img_name = None
+
+    if image_number % validation_ratio == 0:
+        image_name = os.path.join(image_dir, os.path.basename(imgfile))
         labelname = filename.replace( 'original',tumorname )
-        label_img_name = os.path.join(labels, labelname[:-4] + '_Full.png')
-        cv2.imwrite(label_img_name, label_img)
-    if isValid == True:
-        imagename = os.path.join(vtumor_dir, filename[:-4] + '_Full.jpg')
-        cv2.imwrite(imagename,img)
-
+        label_img_name = os.path.join(label_dir, os.path.basename(labelname))
+    else:
+        image_name = os.path.join(vimage_dir, os.path.basename(filename))
         labelname = filename.replace( 'original',tumorname )
-        label_img_name = os.path.join(vlabels, labelname[:-4] + '_Full.png')
-        cv2.imwrite(label_img_name, label_img)
+        label_img_name = os.path.join(vlabel_dir, os.path.basename(labelname))
 
-    stop = time()
-#    print('processing time : ' + str(stop - start))
-    log.writelines('processing time : ' + str(stop - start) + '\n')
-    return rgb_sum
+    cv2.imwrite(image_name,cv2.cvtColor(img,cv2.COLOR_RGB2BGR))
+    cv2.imwrite(label_img_name, label_img)
 
 
 if __name__ == '__main__':
     root_pth = '/data/leaf_train/'
     tumorname = "brown"
     version = "Sep22"
-    # clear test image list, i.e. using all the labeled images
-    test_imgs_list = []
-
-    rgb_sum = np.array((0,0,0),dtype=np.float32)
 
     validation_ratio = 8 # 1 out of every validation_ratio images will go to validation_dir
 
-    # img_pth1 = root_pth + "imgs"
-    # img_pth2 = root_pth + "new_imgs_200527/lesion_training_set_2"
-    img_pth = [root_pth + "imgs_all"]
-    all_possible_files = glob.glob(img_pth[0]+'/*.png')
-    savepath = osp.join(root_pth, tumorname, version, 'Full')
-    logdirpth = osp.join(root_pth, tumorname, version, 'log')
-    if not os.path.exists(logdirpth):
-        os.makedirs(logdirpth)
-    logpath = osp.join(root_pth, tumorname, version, 'log', 'Full_XY3c.log')
+    img_pth = root_pth + "imgs_all"
+    savepath = os.path.join(root_pth, tumorname, version )
+    all_possible_files = glob.glob(img_pth+'/*.png')
 
-    images = os.path.join(savepath, 'images')
-    labels = os.path.join(savepath, 'labels')
+    image_dir = os.path.join(savepath, 'images')
+    label_dir = os.path.join(savepath, 'labels')
 
     validation_dir = os.path.join(savepath, 'validation')
-    vimages = os.path.join(validation_dir, 'images')
-    vlabels = os.path.join(validation_dir, 'labels')
-    vtumor_dir = os.path.join(vimages, tumorname)
+    vimage_dir = os.path.join(validation_dir, 'images')
+    vlabel_dir = os.path.join(validation_dir, 'labels')
 
 
-    if not os.path.exists(images):
-        os.makedirs(images)
-    if not os.path.exists(labels):
-        os.makedirs(labels)
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
+    if not os.path.exists(label_dir):
+        os.makedirs(label_dir)
     if not os.path.exists(validation_dir):
         os.makedirs(validation_dir)
-    if not os.path.exists(vimages):
-        os.makedirs(vimages)
-    if not os.path.exists(vlabels):
-        os.makedirs(vlabels)
-    if not os.path.exists(vtumor_dir):
-        os.makedirs(vtumor_dir)
-
-    Tumordir = os.path.join(images, tumorname)
-    if not os.path.exists(Tumordir):
-        os.makedirs(Tumordir)
-
-    log = open(logpath, 'w')
-
-    total_start = time()
+    if not os.path.exists(vimage_dir):
+        os.makedirs(vimage_dir)
+    if not os.path.exists(vlabel_dir):
+        os.makedirs(vlabel_dir)
 
     image_number = 1
-    #for pth, dirs, filenames in chain.from_iterable(os.walk(path) for path in img_pth):
-    #    for filename in filenames:
-    #        if not "original" in filename:
-    #            continue
-    #        if filename in test_imgs_list:
-    #            continue
-    #        file = os.path.join(pth, filename)
-    #        labelfile = file.replace("original", tumorname)
-#
-#            if labelfile not in all_possible_files:
-#                continue
+    filenames = glob.glob(img_pth + '/*')
+    for imgfile in filenames:
+        if not "original" in imgfile:
+            continue
+        labelfile = imgfile.replace("original", tumorname)
 
-#            if image_number % validation_ratio == 0:
-#                isValid = True
-#            else:
-#                isValid = False
-#            rgb_sum = process_tumor_tif(file, filename, labelfile, images, labels, isValid, log, rgb_sum, tumorname)
-#            image_number += 1
+        if labelfile not in all_possible_files:
+            continue
 
-    total_stop = time()
-#    print("total processing time:", total_stop - total_start)
-    log.writelines("total processing time : " + str(total_stop - total_start) + '\n')
-    log.close()
+        print('Processing :',imgfile)
+        process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image_dir, label_dir, vimage_dir, vlabel_dir )
+        image_number += 1
 
-    #Tumor = os.path.join(images, tumorname)
-    tumorlist = os.listdir(Tumordir)
-    print( 'tumorlist :',tumorlist )
-    print( 'lables :',labels )
-    tumortxt = open(os.path.join(savepath, 'train.txt'), 'w')
-    print( 'savepath :',savepath )
-    for t in tumorlist:
-        tumorfilename = os.path.join(Tumordir, t)
-        label_file = t.replace( 'jpg','png' )
-        label_file = label_file.replace( 'original',tumorname )
-        labelname = os.path.join(labels, label_file)
-        print( 'labelname :',labelname )
-        if os.path.exists(labelname):
-            tumortxt.writelines(tumorfilename + ' ' + labelname + '\n')
-    tumortxt.close()
+    traintxt = open(os.path.join(savepath, 'train.txt'), 'w')
+    imglist = os.listdir(image_dir)
+    for i in imglist:
+        img_file_name = os.path.join(image_dir,i)
+        label_file_name = os.path.join(label_dir,i.replace('original',tumorname))
+        if os.path.exists(label_file_name):
+            traintxt.writelines(img_file_name + ',' + label_file_name + '\n')
+    traintxt.close()
 
-    valtxt = open(os.path.join(savepath, 'validation.txt'), 'w')
-    vallist = os.listdir(vtumor_dir)
-    for t in vallist:
-        valfilename = os.path.join(vtumor_dir, t)
-        label_file = t.replace( 'jpg','png' )
-        label_file = label_file.replace( 'original',tumorname )
-        labelname = os.path.join(vlabels, label_file)
-        print( 'vlabelname :',labelname )
-        if os.path.exists(labelname):
-            valtxt.writelines(valfilename + ' ' + labelname + '\n')
-    valtxt.close()
-
-    print( 'mean_rgb :',rgb_sum/(image_number-1) )
-
-    #Normal = os.path.join(images, 'normal')
-    #normallist = os.listdir(Normal)
-    #normaltxt = open(os.path.join(savepath, 'normal.txt'), 'w')
-    #labelname = os.path.join(labels, 'All_Normal_Mask.png')
-    #for n in normallist:
-    #    normalname = os.path.join(Normal, n)
-    #    normaltxt.writelines(normalname + ' ' + labelname + '\n')
-    #normaltxt.close()
+    validationtxt = open(os.path.join(savepath, 'validation.txt'), 'w')
+    imglist = os.listdir(vimage_dir)
+    for i in imglist:
+        img_file_name = os.path.join(vimage_dir,i)
+        label_file_name = os.path.join(vlabel_dir,i.replace('original',tumorname))
+        if os.path.exists(label_file_name):
+            validationtxt.writelines(img_file_name + ',' + label_file_name + '\n')
+    validationtxt.close()
