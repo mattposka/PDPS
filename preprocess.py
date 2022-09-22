@@ -1,19 +1,10 @@
-import os
-import os.path as osp
-from skimage import filters
 import numpy as np
 from time import time
-from PIL import Image
 import threading
-from utils.mk_datasets import test_imgs_list
-import scipy
 from skimage.measure import label, regionprops
 from skimage.morphology import closing, square
-from itertools import chain
-# MP added to test
 import cv2
 import scipy.stats as ss
-import pickle as p
 
 def makeSquare(img):
     datatype = img.dtype
