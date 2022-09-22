@@ -543,9 +543,9 @@ class GUI(tk.Frame):
         leaf_seg_stack = []
         leaf_img_stack = []
         start_image_df_idx = None
-        leafMask = []
-        center_h = 0
-        center_w = 0
+        leafMask = None
+        row_mid = 0
+        col_mid = 0
         half_side = 0
         resize_ratio = 0
         cams_completed = 1
@@ -580,13 +580,13 @@ class GUI(tk.Frame):
                 print('\nProcessing {}/{} Cameras'.format(cams_completed, num_unique_leaves))
                 print('Processing image :', filename)
                 start_image_df_idx = df_index
-                resized_image, normalized_image, leaf_mask, resize_ratio, center_h, center_w, half_side \
-                    = process_tif(test_img_pth,patch_size,mean=IMG_MEAN )
+                resized_image, normalized_image, leaf_mask, resize_ratio, half_side, row_mid, col_mid \
+                    = process_tif(test_img_pth)
                 leaf_img_stack = [resized_image]
                 leaf_seg_stack = []
                 leafMask = leaf_mask
             else:
-                resized_image, normalized_image, leaf_mask, resize_ratio, = quick_process_tif(test_img_pth,patch_size,leafMask,center_h,center_w,half_side )
+                resized_image, normalized_image, resize_ratio, = quick_process_tif(test_img_pth,leafMask,row_mid,col_mid,half_side )
                 leaf_img_stack.append(resized_image)
                 print( 'Processing image :',filename )
 
