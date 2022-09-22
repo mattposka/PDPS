@@ -77,11 +77,10 @@ class LEAFTrain(data.Dataset):
             image = scipy.ndimage.rotate(image,angle)
             label = scipy.ndimage.rotate(label,angle)
 
-        print('image.shape :',image.shape)
         if self.standardize:
             image = prep.normalizeImage(image)
 
-        print('image.shape :',image.shape)
+        image = np.asarray(image, np.float32)
         image = Image.fromarray(image)
         if self.is_jitter:
             image = self.jitter_transform(image)
