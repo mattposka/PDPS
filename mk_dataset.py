@@ -150,11 +150,11 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
     if image_number % validation_ratio == 0:
         image_name = os.path.join(image_dir, os.path.basename(imgfile))
         labelname = filename.replace( 'original',tumorname )
-        label_img_name = os.path.join(label_dir, os.path.basename(labelname))
+        label_img_name = os.path.join(label_dir, os.path.basename(labelfile))
     else:
-        image_name = os.path.join(vimage_dir, os.path.basename(filename))
+        image_name = os.path.join(vimage_dir, os.path.basename(imgfile))
         labelname = filename.replace( 'original',tumorname )
-        label_img_name = os.path.join(vlabel_dir, os.path.basename(labelname))
+        label_img_name = os.path.join(vlabel_dir, os.path.basename(labelfile))
 
     cv2.imwrite(image_name,cv2.cvtColor(img,cv2.COLOR_RGB2BGR))
     cv2.imwrite(label_img_name, label_img)
