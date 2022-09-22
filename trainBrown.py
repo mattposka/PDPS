@@ -29,6 +29,7 @@ start = timeit.default_timer()
 
 IMG_MEAN = np.array((96.25992, 109.307915 , 128.95671), dtype=np.float32)  # BGR
 
+RESTORE_FROM = None
 BATCH_SIZE = 6
 MAX_EPOCH = 200
 #MAX_EPOCH = 500
@@ -66,6 +67,7 @@ sys.stdout = Logger(LOG_PATH, sys.stdout)
 print(DATA_LIST_PATH)
 print(VAL_LIST_PATH)
 print("num of epoch:", MAX_EPOCH)
+print("RESTORE_FROM:", RESTORE_FROM)
 print(NUM_EXAMPLES_PER_EPOCH)
 
 
