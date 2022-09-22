@@ -348,36 +348,36 @@ def main():
                 np.savetxt(args.snapshot_dir+'train_acc_log.txt',train_acc_list_array)
 
 
-            if actual_step % args.save_img_freq == 0:
-                msk_size = pred.size(2)
-                image = np.transpose(image,(1, 2, 0))
-                image = cv2.resize(image, (msk_size, msk_size), interpolation=cv2.INTER_NEAREST)
-                image2show = image[:,:,:3]
-                image2show = image2show*255
-                label = labels.data.cpu().numpy()[0]
-                label = vl2im(label)
+            #if actual_step % args.save_img_freq == 0:
+            #    msk_size = pred.size(2)
+            #    image = np.transpose(image,(1, 2, 0))
+            #    image = cv2.resize(image, (msk_size, msk_size), interpolation=cv2.INTER_NEAREST)
+            #    image2show = image[:,:,:3]
+            #    image2show = image2show*255
+            #    label = labels.data.cpu().numpy()[0]
+            #    label = vl2im(label)
 
 
-                #single_pred = pred.data.cpu().numpy()[0].argmax(axis=0)
-                #single_pred = vl2im(single_pred)
-                single_pred = np.where(pred.data.cpu().numpy()[0]>=0,1,0)
-                #print('single_pred.shape :',single_pred.shape)
-                single_pred = vl2im(single_pred)
+            #    #single_pred = pred.data.cpu().numpy()[0].argmax(axis=0)
+            #    #single_pred = vl2im(single_pred)
+            #    single_pred = np.where(pred.data.cpu().numpy()[0]>=0,1,0)
+            #    #print('single_pred.shape :',single_pred.shape)
+            #    single_pred = vl2im(single_pred)
 
-                new_im = Image.new('RGB', (msk_size * 3, msk_size))
-                new_im.paste(Image.fromarray(image2show.astype('uint8'), 'RGB'), (0, 0))
-                new_im.paste(Image.fromarray(single_pred.astype('uint8'), 'RGB'), (msk_size, 0))
-                new_im.paste(Image.fromarray(label.astype('uint8'), 'RGB'), (msk_size * 2, 0))
-                new_im_name = 'B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '_' + patch_name[0].replace('.npy','.png')
-                new_im_file = os.path.join(args.img_dir, new_im_name)
-                new_im.save(new_im_file)
+            #    new_im = Image.new('RGB', (msk_size * 3, msk_size))
+            #    new_im.paste(Image.fromarray(image2show.astype('uint8'), 'RGB'), (0, 0))
+            #    new_im.paste(Image.fromarray(single_pred.astype('uint8'), 'RGB'), (msk_size, 0))
+            #    new_im.paste(Image.fromarray(label.astype('uint8'), 'RGB'), (msk_size * 2, 0))
+            #    new_im_name = 'B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '_' + patch_name[0].replace('.npy','.png')
+            #    new_im_file = os.path.join(args.img_dir, new_im_name)
+            #    new_im.save(new_im_file)
 
             if actual_step % args.save_pred_every == 0 and cnt != 0:
                 print('taking snapshot ...')
                 torch.save({'example': actual_step * args.batch_size,
                             'state_dict': model.state_dict()},
                            osp.join(args.snapshot_dir,
-                                    'LEAF_UNET_572_B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '.pth'))
+                                    'LEAF_UNET_B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '.pth'))
             if actual_step >= args.final_step:
                 break
             if STOP_EARLY == True:
