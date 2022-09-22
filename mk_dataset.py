@@ -163,7 +163,7 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
 
 if __name__ == '__main__':
     root_pth = '/data/leaf_train/'
-    tumorname = "green"
+    tumorname = "brown"
     version = "Sep22"
 
     validation_ratio = 8 # 1 out of every validation_ratio images will go to validation_dir
