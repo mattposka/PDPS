@@ -350,7 +350,7 @@ def main():
 
             if actual_step % args.save_img_freq == 0:
                 msk_size = pred.size(2)
-                image = image.transpose(1, 2, 0)
+                image = np.transpose(image,(1, 2, 0))
                 image = cv2.resize(image, (msk_size, msk_size), interpolation=cv2.INTER_NEAREST)
                 image2show = image[:,:,:3]
                 image2show = image2show*255
