@@ -41,7 +41,7 @@ class _DecoderBlock(nn.Module):
         return self.decode(x)
 
 
-class UNetDICE_Brown(nn.Module):
+class UNetDICE(nn.Module):
     def __init__(self, num_classes):
         super(UNetDICE_Erode, self).__init__()
         self.enc1 = _EncoderBlock(3, 96, ksize=3)
