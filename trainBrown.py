@@ -66,7 +66,6 @@ sys.stdout = Logger(LOG_PATH, sys.stdout)
 print(DATA_LIST_PATH)
 print(VAL_LIST_PATH)
 print("num of epoch:", MAX_EPOCH)
-print("RESTORE_FROM:", RESTORE_FROM)
 print(NUM_EXAMPLES_PER_EPOCH)
 
 
