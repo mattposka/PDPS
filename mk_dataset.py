@@ -155,6 +155,8 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
         labelname = os.path.basename(imgfile).replace( 'original',tumorname )
         label_img_name = os.path.join(label_dir, labelname)
 
+    print('\timage_name :',image_name)
+    print('\tlabel_img_name :',label_img_name)
     cv2.imwrite(image_name,cv2.cvtColor(img,cv2.COLOR_RGB2BGR))
     cv2.imwrite(label_img_name, label_img)
 
