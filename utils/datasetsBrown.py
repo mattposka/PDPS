@@ -88,7 +88,7 @@ class LEAFTrain(data.Dataset):
         image = np.asarray(image, np.float32)
         label = np.asarray(label, np.float32)
 
-        image = image.transpose((2, 0, 1))
+        image = np.transpose(image,(2, 0, 1))
 
         # image is returned as RGB
         return image.copy(), label.copy(), datafiles["name"]
@@ -115,7 +115,7 @@ class LEAFTest(data.Dataset):
         image = cv2.cvtColor(image,cvt.COLOR_BGR2RGB)
         image = np.asarray(image, np.float32)
 
-        image = image.transpose((2, 0, 1))
+        image = np.transpose(image,(2, 0, 1))
         return image.copy(), datafiles["name"]
 
 
