@@ -19,16 +19,8 @@ from torch.utils import data
 from utils.datasetsFull import LEAFTest
 import postprocess as postp
 
-import model.u_net as u_net
-import model.u_net2 as u_net2
-
-import model.u_net572 as u_net572
-import model.u_net572_dilated as u_net572_dilated
-import model.u_netFull512 as u_netFull512
-import model.u_netFull512_Dilated as u_netFull512_Dilated
-import model.u_netCircle as u_netCircle
 import model.u_netDICE as u_netDICE
-import model.u_netDICE_Erode_Run as u_netDICE_Erode_Run
+import model.u_netDICE_Brown as u_netDICE_Brown
 
 import torch.nn as nn
 import imageio as io
