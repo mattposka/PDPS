@@ -9,6 +9,7 @@ import random
 import matplotlib.pyplot as plt
 import scipy.ndimage
 import preprocess as prep
+from PIL import Image
 
 
 class LEAFTrain(data.Dataset):
@@ -79,12 +80,14 @@ class LEAFTrain(data.Dataset):
         if self.standardize:
             image = prep.normalizeImage(image)
 
-        image = image.transpose((2, 0, 1))
+        image = Image.fromarray(image)
         if self.is_jitter:
             image = self.jitter_transform(image)
 
         image = np.asarray(image, np.float32)
         label = np.asarray(label, np.float32)
+
+        image = image.transpose((2, 0, 1))
 
         # image is returned as RGB
         return image.copy(), label.copy(), datafiles["name"]
