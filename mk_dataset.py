@@ -146,15 +146,14 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
 
     image_name = None
     label_img_name = None
-
     if image_number % validation_ratio == 0:
-        image_name = os.path.join(image_dir, os.path.basename(imgfile))
-        labelname = imgfile.replace( 'original',tumorname )
-        label_img_name = os.path.join(label_dir, labelname)
-    else:
         image_name = os.path.join(vimage_dir, os.path.basename(imgfile))
-        labelname = imgfile.replace( 'original',tumorname )
+        labelname = os.path.basename(imgfile).replace( 'original',tumorname )
         label_img_name = os.path.join(vlabel_dir, labelname)
+    else:
+        image_name = os.path.join(image_dir, os.path.basename(imgfile))
+        labelname = os.path.basename(imgfile).replace( 'original',tumorname )
+        label_img_name = os.path.join(label_dir, labelname)
 
     cv2.imwrite(image_name,cv2.cvtColor(img,cv2.COLOR_RGB2BGR))
     cv2.imwrite(label_img_name, label_img)
@@ -162,7 +161,7 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
 
 if __name__ == '__main__':
     root_pth = '/data/leaf_train/'
-    tumorname = "brown"
+    tumorname = "green"
     version = "Sep22"
 
     validation_ratio = 8 # 1 out of every validation_ratio images will go to validation_dir

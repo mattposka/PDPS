@@ -3,6 +3,7 @@
 *.swp
 Brown Annotations/
 o_seg_imgs/
+utils/__pychache__/
 
 Aug31_data*
 default*
