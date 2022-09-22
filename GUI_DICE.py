@@ -581,12 +581,12 @@ class GUI(tk.Frame):
                 print('Processing image :', filename)
                 start_image_df_idx = df_index
                 resized_image, normalized_image, leaf_mask, resize_ratio, center_h, center_w, half_side \
-                    = process_tif(test_img_pth,patch_size,mean=IMG_MEAN )
+                    = process_tif(test_img_pth)
                 leaf_img_stack = [resized_image]
                 leaf_seg_stack = []
                 leafMask = leaf_mask
             else:
-                resized_image, normalized_image, leaf_mask, resize_ratio, = quick_process_tif(test_img_pth,patch_size,leafMask,center_h,center_w,half_side )
+                resized_image, normalized_image, leaf_mask, resize_ratio, = quick_process_tif(test_img_pth,leafMask,center_h,center_w,half_side )
                 leaf_img_stack.append(resized_image)
                 print( 'Processing image :',filename )
 

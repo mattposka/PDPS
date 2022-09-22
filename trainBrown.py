@@ -12,19 +12,9 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import os
 import os.path as osp
-#from utils.datasets import LEAFTrain
-#from utils.datasetsNorm import LEAFTrain
-from utils.datasetsCircle import LEAFTrain
-#from utils.datasetsFull import LEAFTrain
-#from model.u_net import UNet
-#from model.u_net2 import UNet
+from utils.datasetsBrown import LEAFTrain
 from model.u_net572 import UNet
-#from model.u_netFull512 import UNetFull512
-#from model.u_netFull512_Dilated import UNetFull512_Dilated
-#from model.u_netCircle import UNetCircle
 from model.u_netDICE import UNetDICE
-#from model.u_netDICE_Erode import UNetDICE_Erode
-#from model.u_netFull512_Simple import UNetFull512_Simple
 import timeit
 import math
 from tensorboardX import SummaryWriter
@@ -279,23 +269,19 @@ def main():
     #print( 'args.data_list :',args.data_list )
 
     trainloader = data.DataLoader(LEAFTrain(args.data_list,
-                                               #resize_size=input_size, scale=args.random_scale,
-                                               crop_size=input_size, scale=args.random_scale,
+                                               scale=args.random_scale,
                                                mirror=args.random_mirror, color_jitter=args.random_jitter,
                                                rotate=args.random_rotate,
-                                               mean=IMG_MEAN),
+                                               ),
                                   batch_size=args.batch_size,
-                                  #shuffle=True, num_workers=args.num_workers)
                                   )
 
     valloader = data.DataLoader(LEAFTrain(args.val_list,
-                                               #resize_size=input_size, scale=args.random_scale,
-                                               crop_size=input_size, scale=args.random_scale,
+                                               scale=args.random_scale,
                                                mirror=args.random_mirror, color_jitter=args.random_jitter,
                                                rotate=args.random_rotate,
-                                               mean=IMG_MEAN),
+                                               ),
                                   batch_size=args.batch_size,
-                                  #shuffle=True, num_workers=args.num_workers)
                                   )
     #print( 'trainloader len :',len(trainloader) )
     #print( 'trainloader :',trainloader )
