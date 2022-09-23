@@ -6,7 +6,6 @@ import torchvision.transforms as transforms
 from PIL import Image
 import torchvision.transforms.functional as F
 import random
-import matplotlib.pyplot as plt
 import scipy.ndimage
 import preprocess as prep
 from PIL import Image
@@ -112,7 +111,7 @@ class LEAFTest(data.Dataset):
     def __getitem__(self, index):
         datafiles = self.files[index]
         image = cv2.imread(datafiles["img"]) #BGR
-        image = cv2.cvtColor(image,cvt.COLOR_BGR2RGB)
+        image = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
         image = np.asarray(image, np.float32)
 
         image = np.transpose(image,(2, 0, 1))
