@@ -98,9 +98,10 @@ class GUI(tk.Frame):
         self.modelFrame = tk.Frame( root,bg='#D85B63',borderwidth=15,relief='ridge' )
 
         self.modelTypeVar = tk.StringVar( self.modelFrame )
-        self.modelTypeVar.set( 'LEAF_UNET_DICE_NOV21.pth' )
+        self.modelTypeVar.set( 'LEAF_UNET_BROWN_SEP22.pth' )
         models_available_list = self.getModelsAvailable()
-        self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelFrame,self.modelTypeVar,*models_available_list )
+        #self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelFrame,self.modelTypeVar,*models_available_list )
+        self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelTypeVar,*models_available_list )
         self.modelTypeMenu.grid( row=1,column=0 )
 
         self.modelFrame.grid_rowconfigure( (0,1),weight=1 )
@@ -351,7 +352,8 @@ class GUI(tk.Frame):
             month = int( imname[17:19] )
             day = int( imname[20:22] )
             hour = int( int( imname[23:27] ) / 100 )
-            for j in range(self.num_lesions):
+            #TODO set to num_lesions
+            for j in range(4):
                 imagemat.append([imname, i, cameraID, year, month, day, hour])
 
         self.imageDF = pd.DataFrame( imagemat,columns=['Image Name','File Location','CameraID','Year','Month','Day','Hour'] )
@@ -485,36 +487,25 @@ class GUI(tk.Frame):
         if not os.path.exists( model_dir ):
             os.makedirs( model_dir )
 
-        # choose pytorch model based off of model type
-        model_id = self.model_name
-        model_pth = os.path.join( model_dir,( model_id ) )
-        RESTORE_FROM = model_pth
-        print("\nModel restored from:", RESTORE_FROM)
-        ###################################################################
-        
         self.formatDF()
 
         print('self.metaFile :',self.metaFile)
         self.readMetaFile()
-
-        #TODO maybe do all of the model-specific stuff here
-        modelname = self.modelTypeVar.get()
-        patch_size = 512
 
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print( '\tUsing device:',device )
         if device.type == 'cuda':
             print( '\t',pytorch.cuda.get_device_name(0) )
 
-        #TODO make this cleaner later, but for now just load different model if it has the specific name
-        NUM_CLASSES = 2
-        model = u_netDICE_Brown.UNetDICE(NUM_CLASSES)
-        #if model_id == 'LEAF_UNET_DICE_NOV21.pth':
-        #    model = u_netDICE.UNetDICE(NUM_CLASSES)
 
+        # choose pytorch model based off of model type
+        NUM_CLASSES = 2
+        model_pth = os.path.join( model_dir,( self.modelTypeVar.get() ) )
+        model = u_netDICE_Brown.UNetDICE(NUM_CLASSES)
         model = nn.DataParallel(model)
         model.to(device)
-        saved_state_dict = torch.load(RESTORE_FROM, map_location=lambda storage, loc: storage)
+        saved_state_dict = torch.load(model_pth, map_location=lambda storage, loc: storage)
+        print("\nModel restored from:", model_pth)
 
         model.load_state_dict(saved_state_dict['state_dict'])
         model.eval()
