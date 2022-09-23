@@ -9,13 +9,11 @@ import cv2
 import os
 import scipy.ndimage as ndi
 
-def watershedSegStack(seg_stack,num_lesions,postprocess_dir,imageDF,df_index):
+def watershedSegStack(seg_stack,num_lesions,postprocess_dir,cam_num):
 
     seg_stack = seg_stack.copy()
     imgs,rows,cols = seg_stack.shape
     sum_stack = np.sum(seg_stack,axis=(0)) / imgs
-
-    cam_num = imageDF.loc[df_index, 'CameraID']
 
     bin_img = np.where(sum_stack > 0, True, False)
     distance = ndi.distance_transform_edt(bin_img)
@@ -73,11 +71,11 @@ def watershedSegStack(seg_stack,num_lesions,postprocess_dir,imageDF,df_index):
     seg_stack_save_pth = os.path.join(postprocess_dir,'cam' + str(cam_num) + 'segstack.png')
     label_map_save_pth = os.path.join(postprocess_dir, 'cam' + str(cam_num) + 'label_map.png')
     cv2.imwrite( seg_stack_save_pth,255.0*gray2rgb(sum_stack) )
-    cv2.imwrite( label_map_save_pth,255.0*label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']) )
+    cv2.imwrite( label_map_save_pth,cv2.cvtCOLOR(255.0*label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']),cv2.COLOR_RGB2BGR) )
 
-    return sum_stack, label_map_ws
+    return label_map_ws
 
-def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,starting_df_index,resize_ratio,postprocess_dir,imgsWLesions_dir):
+def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,resize_ratio,postprocess_dir,imgsWLesions_dir):
     seg_stack = seg_stack.copy()
     # add first fake segmentation of zero to make processing easier
     num_imgs,rows,cols = seg_stack.shape
@@ -86,18 +84,18 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,starting_d
 
     alpha = 0.4
     for i in range(num_imgs):
-        df_index = starting_df_index + i*num_lesions
-
-        leaf_img = np.array(img_stack[i],dtype='float32')
+        df_index = i*num_lesions
         img_name = imageDF.loc[df_index,'Image Name']
+        leaf_img = np.array(img_stack[i],dtype='float32') # leaf_img is RGB
+
         original_img = leaf_img.copy()
         original_seg = original_img.copy()
-        original_seg[:,:,0] = np.where(seg_stack[i+1,:,:]==1,255,0)
-        original_seg[:,:,1] = np.where(original_seg[:,:,2]==255,0,original_seg[:,:,1])
-        original_seg[:,:,2] = np.where(original_seg[:,:,0]==255,0,original_seg[:,:,0])
+        original_seg[:,:,0] = np.where(seg_stack[i+1,:,:]==1,255,original_seg[:,:,0])
+        original_seg[:,:,1] = np.where(seg_stack[i+1,:,:]==1,0,original_seg[:,:,1])
+        original_seg[:,:,2] = np.where(seg_stack[i+1,:,:]==1,0,original_seg[:,:,2])
         orig_seg_img = cv2.addWeighted(original_img,1-alpha,original_seg,alpha,0.0)
         orig_seg_img_pth = os.path.join(postprocess_dir, img_name.replace('.png','') + '_OSeg.png')
-        cv2.imwrite(orig_seg_img_pth,orig_seg_img)
+        cv2.imwrite(orig_seg_img_pth,cv2.cvtColor(orig_seg_img,cv2.COLOR_RGB2BGR))
 
         # current image is the previous segmentation AND the current segmentation
         # so that lesions don't randomly disappear
@@ -113,7 +111,7 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,starting_d
 
         img_w_lesions = cv2.addWeighted(leaf_img,1-alpha,overlay,alpha,0.0)
         img_w_lesions_pth = os.path.join(imgsWLesions_dir, img_name.replace('.png','_lesions.png'))
-        cv2.imwrite(img_w_lesions_pth,img_w_lesions)
+        cv2.imwrite(img_w_lesions_pth,cv2.cvtColor(img_w_lesions,cv2.COLOR_RGB2BGR))
 
         lesion_total = 0
         for l in range(num_lesions):
@@ -130,3 +128,36 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,starting_d
             imageDF.at[df_index+l, 'Avg Adj Pixel Size'] = lesion_avg * resize_ratio
 
     return imageDF
+
+def cleanDF(df):
+    clean_df = df[[
+        'Image Name',
+        'File Location',
+        'CameraID',
+        'Year',
+        'Month',
+        'Day',
+        'Hour',
+        'Innoc Year',
+        'Innoc Month',
+        'Innoc Day',
+        'Innoc Hour',
+        'Hours Elapsed',
+        'Lesion #',
+        'Lesion Area Pixels',
+        'ResizeRatio',
+        'Adjusted Lesion Pixels',
+        'Avg Adj Pixel Size',
+        'Camera #',
+        'Array #',
+        'Leaf #',
+        'Leaf Section #',
+        'Covariable 1',
+        'Covariable 2',
+        'Covariable 3',
+        'Covariable 4',
+        'Vector Name',
+        'Gene of Interest',
+        'Comments',
+        'Description']]
+    return clean_df

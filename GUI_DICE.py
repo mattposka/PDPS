@@ -15,20 +15,10 @@ from preprocess import process_tif, quick_process_tif
 import numpy as np
 import torch
 from torch.utils import data
-#from utils.datasets import LEAFTest
-from utils.datasetsFull import LEAFTest
 import postprocess as postp
 
-import model.u_net as u_net
-import model.u_net2 as u_net2
-
-import model.u_net572 as u_net572
-import model.u_net572_dilated as u_net572_dilated
-import model.u_netFull512 as u_netFull512
-import model.u_netFull512_Dilated as u_netFull512_Dilated
-import model.u_netCircle as u_netCircle
 import model.u_netDICE as u_netDICE
-import model.u_netDICE_Erode_Run as u_netDICE_Erode_Run
+import model.u_netDICE_Brown as u_netDICE_Brown
 
 import torch.nn as nn
 import imageio as io
@@ -40,13 +30,6 @@ from skimage.morphology import closing, square, remove_small_objects
 import datetime as dt
 import glob
 import warnings
-
-import shutil
-
-from skimage.segmentation import watershed
-from skimage import measure
-from skimage.feature import peak_local_max
-from scipy import ndimage
 
 # There is a UserWarning for one pytorch layer that I dont' want printing
 warnings.filterwarnings('ignore',category=UserWarning)
@@ -368,8 +351,7 @@ class GUI(tk.Frame):
             month = int( imname[17:19] )
             day = int( imname[20:22] )
             hour = int( int( imname[23:27] ) / 100 )
-            #TODO make this self.num_lesions later
-            for j in range(4):
+            for j in range(self.num_lesions):
                 imagemat.append([imname, i, cameraID, year, month, day, hour])
 
         self.imageDF = pd.DataFrame( imagemat,columns=['Image Name','File Location','CameraID','Year','Month','Day','Hour'] )
@@ -378,7 +360,7 @@ class GUI(tk.Frame):
         self.imageDF['Adjusted Lesion Pixels'] = ''
         self.imageDF['Camera #'] = self.imageDF['CameraID']
         self.imageDF = self.imageDF.sort_values( by=['CameraID','Year','Month','Day','Hour'] )
-        self.imageDF['index_num'] = np.arange( len(self.imageDF) )
+        self.imageDF['image_id'] = np.arange( len(self.imageDF) )
         self.imageDF = self.imageDF.reset_index(drop=True)
         imagelst = self.imageDF['File Location']
         return imagelst
@@ -519,8 +501,6 @@ class GUI(tk.Frame):
         modelname = self.modelTypeVar.get()
         patch_size = 512
 
-        IMG_MEAN = np.array((128.95671, 109.307915, 96.25992), dtype=np.float32) # R G B
-
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print( '\tUsing device:',device )
         if device.type == 'cuda':
@@ -528,9 +508,9 @@ class GUI(tk.Frame):
 
         #TODO make this cleaner later, but for now just load different model if it has the specific name
         NUM_CLASSES = 2
-        model = u_netDICE_Erode_Run.UNetDICE_Erode_Run(NUM_CLASSES)
-        if model_id == 'LEAF_UNET_DICE_NOV21.pth':
-            model = u_netDICE.UNetDICE(NUM_CLASSES)
+        model = u_netDICE_Brown.UNetDICE(NUM_CLASSES)
+        #if model_id == 'LEAF_UNET_DICE_NOV21.pth':
+        #    model = u_netDICE.UNetDICE(NUM_CLASSES)
 
         model = nn.DataParallel(model)
         model.to(device)
@@ -539,122 +519,59 @@ class GUI(tk.Frame):
         model.load_state_dict(saved_state_dict['state_dict'])
         model.eval()
 
-        num_unique_leaves = len(np.unique(self.imageDF['CameraID']))
-        leaf_seg_stack = []
-        leaf_img_stack = []
-        start_image_df_idx = None
-        leafMask = None
-        row_mid = 0
-        col_mid = 0
-        half_side = 0
-        resize_ratio = 0
-        cams_completed = 1
-        for df_index,df_row in self.imageDF.iterrows():
-            if df_index % self.num_lesions != 0:
-                continue
+        camera_ids = np.unique(self.imageDF['CameraID'])
+        for cams_completed,camera_id in enumerate(camera_ids):
 
-            test_img_pth = df_row[ 'File Location' ]
-            filename = test_img_pth.split('/')[-1] # name of the image
+            cameraDF = self.imageDF.loc[lambda df: df['CameraID']==camera_id, : ]
+            new_camera = True
 
-            # image_fg_size is the size of the side of the square containing the entire unresized leaf
-            # save this number for later use when to determine the actual size of all of the lesions later
+            leaf_seg_stack = []
+            leaf_img_stack = []
+            start_image_df_idx = None
+            leaf_mask = None
+            row_mid = 0
+            col_mid = 0
+            half_side = 0
+            resize_ratio = 0
+            cams_completed = 1
 
-            new_leaf = True
-            prev_img_df = self.imageDF[
-                (self.imageDF['CameraID'] == self.imageDF.loc[df_index, 'CameraID']) &
-                (self.imageDF['Year'] <= self.imageDF.loc[df_index, 'Year']) &
-                (self.imageDF['Month'] <= self.imageDF.loc[df_index, 'Month']) &
-                (self.imageDF['Day'] <= self.imageDF.loc[df_index, 'Day']) &
-                (self.imageDF['index_num'] < df_index)
-                ]
-            if len(prev_img_df) > 0:
-                new_leaf = False
+            for df_index,df_row in cameraDF.iterrows():
+                if df_index % self.num_lesions != 0:
+                    continue
 
-            if new_leaf == True:
-                if leaf_seg_stack:
-                    print('\nPostProcessing now!')
-                    sum_stack,label_map_ws = postp.watershedSegStack(np.array(leaf_seg_stack),self.num_lesions,postprocess_dir,self.imageDF,start_image_df_idx)
-                    self.imageDF = postp.processSegStack(np.array(leaf_seg_stack),leaf_img_stack,self.num_lesions,label_map_ws,self.imageDF,start_image_df_idx,resize_ratio,postprocess_dir,imgsWLesions_dir)
-                    cams_completed += 1
+                test_img_pth = df_row[ 'File Location' ]
+                filename = test_img_pth.split('/')[-1] # name of the image
 
-                print('\nProcessing {}/{} Cameras'.format(cams_completed, num_unique_leaves))
-                print('Processing image :', filename)
-                start_image_df_idx = df_index
-                resized_image, normalized_image, leaf_mask, resize_ratio, half_side, row_mid, col_mid \
-                    = process_tif(test_img_pth)
-                leaf_img_stack = [resized_image]
-                leaf_seg_stack = []
-                leafMask = leaf_mask
-            else:
-                resized_image, normalized_image, resize_ratio, = quick_process_tif(test_img_pth,leafMask,row_mid,col_mid,half_side )
+                if new_camera == True:
+                    print('\nProcessing {}/{} Cameras'.format(cams_completed+1, len(camera_ids)))
+                    print('Processing image :', filename)
+                    resized_image, normalized_image, leaf_mask, resize_ratio, half_side, row_mid, col_mid = process_tif(test_img_pth)
+                    new_camera = False
+                else:
+                    resized_image, normalized_image, resize_ratio, = quick_process_tif(test_img_pth,leaf_mask,row_mid,col_mid,half_side )
+                    print( 'Processing image :',filename )
+
+                with torch.no_grad():
+                    formatted_img = np.transpose(normalized_image,(2,0,1)) # transpose because channels first
+
+                    formatted_img = formatted_img.astype(np.float32)
+                    image_tensor = torch.from_numpy(np.expand_dims(formatted_img,axis=0))
+                    output = model(image_tensor).to(device)
+
+                    msk = torch.squeeze(output).data.cpu().numpy()
+                    msk = np.where(msk>0,1,0)
+
+                leaf_seg_stack.append(msk)
                 leaf_img_stack.append(resized_image)
-                print( 'Processing image :',filename )
+                for k in range(self.num_lesions):
+                    cameraDF.at[ df_index+k,'ResizeRatio' ] = resize_ratio
 
-            for k in range(self.num_lesions):
-                self.imageDF.at[ df_index+k,'ResizeRatio' ] = resize_ratio
-
-            # Add 4th channel (blank or prev_segmentation)
-            h,w,c = normalized_image.shape
-            input_image = np.zeros( (h,w,4) )
-            input_image[:,:,:3] = normalized_image
-
-            with torch.no_grad():
-                formatted_img = np.transpose(input_image,(2,0,1)) # transpose because channels first
-
-                formatted_img = formatted_img.astype(np.float32)
-                image_tensor = torch.from_numpy(np.expand_dims(formatted_img,axis=0))
-                output = model(image_tensor).to(device)
-
-                msk = torch.squeeze(output).data.cpu().numpy()
-                msk = np.where(msk>0,1,0)
-
-            leaf_seg_stack.append(msk)
-#####################################################################################################################
-#####################################################################################################################
-
-        if leaf_seg_stack:
             print('\nPostProcessing now!')
-            sum_stack, label_map_ws = postp.watershedSegStack(np.array(leaf_seg_stack), self.num_lesions,
-                                                              postprocess_dir, self.imageDF, start_image_df_idx)
-            self.imageDF = postp.processSegStack(np.array(leaf_seg_stack), leaf_img_stack, self.num_lesions, label_map_ws,
-                                  self.imageDF, start_image_df_idx, resize_ratio, postprocess_dir, imgsWLesions_dir)
+            label_map_ws = postp.watershedSegStack(np.array(leaf_seg_stack),self.num_lesions,postprocess_dir,camera_id)
+            cameraDF = postp.processSegStack(np.array(leaf_seg_stack),leaf_img_stack,self.num_lesions,label_map_ws,cameraDF,resize_ratio,postprocess_dir,imgsWLesions_dir)
 
-        clean_df = self.imageDF.copy()
-
-        # TODO Add Lesion # Column
-        reformatted_csv_df = clean_df[[
-        #reformatted_csv_df = reformatted_csv_df[[
-            'Image Name',
-                'File Location',
-                'CameraID',
-                'Year',
-                'Month',
-                'Day',
-                'Hour',
-                'Innoc Year',
-                'Innoc Month',
-                'Innoc Day',
-                'Innoc Hour',
-                'Hours Elapsed',
-                'Lesion #',
-                'Lesion Area Pixels',
-                'ResizeRatio',
-                'Adjusted Lesion Pixels',
-                'Avg Adj Pixel Size',
-                'Camera #',
-                'Array #',
-                'Leaf #',
-                'Leaf Section #',
-                'Covariable 1',
-                'Covariable 2',
-                'Covariable 3',
-                'Covariable 4',
-                'Vector Name',
-                'Gene of Interest',
-                'Comments',
-                'Description']]
-
-        reformatted_csv.to_csv( result_file,mode='a',header=not os.path.exists(result_file,index=False))
+            clean_df = postp.cleanDF(cameraDF)
+            clean_df.to_csv( result_file,mode='a',header=not os.path.exists(result_file,index=False))
 
         print( '\n\tresult_file located :',result_file )
         print( '\n****************************************************************************' )
