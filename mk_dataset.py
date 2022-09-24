@@ -7,7 +7,6 @@ from skimage.measure import label, regionprops
 from skimage.morphology import closing, square
 import numpy as np
 import threading
-from utils.transforms import im2vl
 from itertools import chain
 
 import scipy.stats as ss
@@ -43,8 +42,7 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
     img = cv2.resize(img,(512,512))
     label_img = cv2.resize(label_img,(512,512))
 
-    # im2vl transforms label_img to 1s and 0s instead of 3d 0-255 values
-    label_img = im2vl(label_img)
+    label_img = prep.annotationsToLabel(label_img)
     label_img = prep.setEdgesToZero(label_img)
 
     image_name = None
@@ -65,7 +63,8 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
 
 
 if __name__ == '__main__':
-    root_pth = '/data/leaf_train/'
+    #root_pth = '/data/leaf_train/'
+    root_pth = 'C:\\Users\\mattp\\checkimgs\\'
     tumorname = "green"
     version = "Sep22"
 
