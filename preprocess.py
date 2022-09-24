@@ -94,7 +94,10 @@ def rmBackground(img,mask):
     return img
 
 def annotationsToLabel(label_img):
-    return np.where(label_img==[255,0,0],1,0)
+    img_tmp = np.ones(label_img.shape[:2], dtype=np.uint8)
+    neg_msk = np.all(label_img == [255, 255, 255], axis=2)
+    img_tmp[neg_msk] = 0
+    return img_tmp
 
 def setEdgesToZero(label_img):
     label_img[:1,:] = 0

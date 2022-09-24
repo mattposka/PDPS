@@ -23,7 +23,7 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
 
     label_img = cv2.imread(labelfile)
     label_img = label_img[:,:,:3]
-    label_img = cv2.resize(label_img,(orig_r,orig_c))
+    label_img = cv2.resize(label_img,(orig_c,orig_r))
 
     img = prep.makeSquare(img)
     label_img = prep.makeSquare(label_img)
@@ -34,7 +34,7 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
     half_side,row_mid,col_mid = prep.getCropBoundsSquare(left_cut,right_cut,top_cut,bot_cut)
 
     img = prep.cropSquare(img,half_side,row_mid,col_mid)
-    label_img = prep.cropSquare(img,half_side,row_mid,col_mid)
+    label_img = prep.cropSquare(label_img,half_side,row_mid,col_mid)
     leaf_mask = prep.cropSquare(leaf_mask,half_side,row_mid,col_mid)
 
     img = prep.rmBackground(img,leaf_mask)
@@ -63,8 +63,7 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
 
 
 if __name__ == '__main__':
-    #root_pth = '/data/leaf_train/'
-    root_pth = 'C:\\Users\\mattp\\checkimgs\\'
+    root_pth = '/data/leaf_train/'
     tumorname = "green"
     version = "Sep22"
 
