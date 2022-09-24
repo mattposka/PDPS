@@ -42,7 +42,8 @@ def getLeafMask(img):
     labeled_mask_filtered = np.where( labeled_mask==mode_label,np.nan,labeled_mask )
     mode_label,count = ss.mode( labeled_mask_filtered,axis=None,nan_policy='omit' )
     leaf_label = mode_label
-    leaf_mask = np.where( labeled_mask==leaf_label,True,False )
+    leaf_mask = np.where( labeled_mask==leaf_label,1,0 )
+    leaf_mask = np.array(leaf_mask,dtype='uint8')
     return leaf_mask
 
 def getCropBounds(leaf_mask):
@@ -92,6 +93,12 @@ def rmBackground(img,mask):
                 img[i,j,:] = 0
     return img
 
+def annotationsToLabel(label_img):
+    img_tmp = np.ones(label_img.shape[:2], dtype=np.uint8)
+    neg_msk = np.all(label_img == [255, 255, 255], axis=2)
+    img_tmp[neg_msk] = 0
+    return img_tmp
+
 def setEdgesToZero(label_img):
     label_img[:1,:] = 0
     label_img[-1:,:] = 0
@@ -121,6 +128,8 @@ def process_tif( file ):
 
     img = rmBackground(img,leaf_mask)
 
+    print('max(leaf_mask) :',np.max(leaf_mask))
+    print('shape(leaf_mask) :',leaf_mask.shape)
     img = cv2.resize(img,(512,512))
     leaf_mask = cv2.resize(leaf_mask,(512,512))
 
@@ -146,6 +155,6 @@ def quick_process_tif(file,leaf_mask,row_mid,col_mid,half_side):
     total_reshaped_pixels = 4*half_side*half_side
     resize_ratio = total_reshaped_pixels/(512*512)
 
-    normalized_img = normalized_img(img)
+    normalized_img = normalizeImage(img)
 
     return img,normalized_img,resize_ratio

@@ -14,6 +14,8 @@ def watershedSegStack(seg_stack,num_lesions,postprocess_dir,cam_num):
     seg_stack = seg_stack.copy()
     imgs,rows,cols = seg_stack.shape
     sum_stack = np.sum(seg_stack,axis=(0)) / imgs
+    seg_stack_save_pth = os.path.join(postprocess_dir,'cam' + str(cam_num) + 'segstack.png')
+    cv2.imwrite( seg_stack_save_pth,255.0*gray2rgb(sum_stack) )
 
     bin_img = np.where(sum_stack > 0, True, False)
     distance = ndi.distance_transform_edt(bin_img)
@@ -68,9 +70,7 @@ def watershedSegStack(seg_stack,num_lesions,postprocess_dir,cam_num):
 
     label_map_ws = watershed(-distance, labels, mask=bin_img)
 
-    seg_stack_save_pth = os.path.join(postprocess_dir,'cam' + str(cam_num) + 'segstack.png')
     label_map_save_pth = os.path.join(postprocess_dir, 'cam' + str(cam_num) + 'label_map.png')
-    cv2.imwrite( seg_stack_save_pth,255.0*gray2rgb(sum_stack) )
     cv2.imwrite( label_map_save_pth,cv2.cvtCOLOR(255.0*label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']),cv2.COLOR_RGB2BGR) )
 
     return label_map_ws

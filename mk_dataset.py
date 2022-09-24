@@ -7,7 +7,6 @@ from skimage.measure import label, regionprops
 from skimage.morphology import closing, square
 import numpy as np
 import threading
-from utils.transforms import im2vl
 from itertools import chain
 
 import scipy.stats as ss
@@ -24,7 +23,7 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
 
     label_img = cv2.imread(labelfile)
     label_img = label_img[:,:,:3]
-    label_img = cv2.resize(label_img,(orig_r,orig_c))
+    label_img = cv2.resize(label_img,(orig_c,orig_r))
 
     img = prep.makeSquare(img)
     label_img = prep.makeSquare(label_img)
@@ -35,7 +34,7 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
     half_side,row_mid,col_mid = prep.getCropBoundsSquare(left_cut,right_cut,top_cut,bot_cut)
 
     img = prep.cropSquare(img,half_side,row_mid,col_mid)
-    label_img = prep.cropSquare(img,half_side,row_mid,col_mid)
+    label_img = prep.cropSquare(label_img,half_side,row_mid,col_mid)
     leaf_mask = prep.cropSquare(leaf_mask,half_side,row_mid,col_mid)
 
     img = prep.rmBackground(img,leaf_mask)
@@ -43,8 +42,7 @@ def process_tumor_tif( imgfile, labelfile, image_number, validation_ratio, image
     img = cv2.resize(img,(512,512))
     label_img = cv2.resize(label_img,(512,512))
 
-    # im2vl transforms label_img to 1s and 0s instead of 3d 0-255 values
-    label_img = im2vl(label_img)
+    label_img = prep.annotationsToLabel(label_img)
     label_img = prep.setEdgesToZero(label_img)
 
     image_name = None

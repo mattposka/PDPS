@@ -4,6 +4,7 @@
 Brown Annotations/
 o_seg_imgs/
 utils/__pychache__/
+*.png
 
 Aug31_data*
 default*
