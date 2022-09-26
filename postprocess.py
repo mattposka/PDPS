@@ -69,9 +69,11 @@ def watershedSegStack(seg_stack,num_lesions,postprocess_dir,cam_num):
         labels = np.where(labels==lab_u,i,labels)
 
     label_map_ws = watershed(-distance, labels, mask=bin_img)
+    label_map_rgb = np.array(255.0*label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']),dtype='float32')
+    label_map_bgr = cv2.cvtColor(label_map_rgb,cv2.COLOR_RGB2BGR)
 
     label_map_save_pth = os.path.join(postprocess_dir, 'cam' + str(cam_num) + 'label_map.png')
-    cv2.imwrite( label_map_save_pth,cv2.cvtCOLOR(255.0*label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']),cv2.COLOR_RGB2BGR) )
+    cv2.imwrite( label_map_save_pth,label_map_bgr )
 
     return label_map_ws
 

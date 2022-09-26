@@ -128,8 +128,6 @@ def process_tif( file ):
 
     img = rmBackground(img,leaf_mask)
 
-    print('max(leaf_mask) :',np.max(leaf_mask))
-    print('shape(leaf_mask) :',leaf_mask.shape)
     img = cv2.resize(img,(512,512))
     leaf_mask = cv2.resize(leaf_mask,(512,512))
 
