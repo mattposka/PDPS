@@ -485,7 +485,7 @@ class GUI(tk.Frame):
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print( '\tUsing device:',device )
         if device.type == 'cuda':
-            print( '\t',pytorch.cuda.get_device_name(0) )
+            print( '\t',torch.cuda.get_device_name(0) )
 
 
         # choose pytorch model based off of model type

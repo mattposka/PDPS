@@ -126,8 +126,10 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,resize_rat
 
         lesion_avg = lesion_total / num_lesions
 
-        for l in range(num_lesions):
-            imageDF.at[df_index+l, 'Avg Adj Pixel Size'] = lesion_avg * resize_ratio
+        # Only record Avg Adj Pixel Size one time per image for easier statistical analysis
+        #for l in range(num_lesions):
+        #    imageDF.at[df_index+l, 'Avg Adj Pixel Size'] = lesion_avg * resize_ratio
+        imageDF.at[df_index, 'Avg Adj Pixel Size'] = lesion_avg * resize_ratio
 
     return imageDF
 
