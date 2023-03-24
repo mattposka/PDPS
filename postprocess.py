@@ -21,6 +21,8 @@ def watershedSegStack(seg_stack,num_lesions,postprocess_dir,cam_num):
     distance = ndi.distance_transform_edt(bin_img)
 
     min_lesions_over_threshold = float('inf')
+    max_lesions_under_threshold = 0
+    enough_lesions_found = False
     best_labels = None
     threshold = 1.0
     for i in range(20):
@@ -49,10 +51,13 @@ def watershedSegStack(seg_stack,num_lesions,postprocess_dir,cam_num):
         if num_good_lesions_found == num_lesions:
             best_labels = labels
             break
-        else:
-            if num_good_lesions_found < min_lesions_over_threshold and num_good_lesions_found >= num_lesions:
-                min_lesions_over_threshold = num_good_lesions_found
-                best_labels = labels
+        elif num_good_lesions_found < min_lesions_over_threshold and num_good_lesions_found >= num_lesions:
+            min_lesions_over_threshold = num_good_lesions_found
+            enough_lesions_found = True
+            best_labels = labels
+        elif num_good_lesions_found > max_lesions_under_threshold and enough_lesions_found == False:
+            max_lesions_under_threshold = num_good_lesions_found
+            best_labels = labels
 
     labels = best_labels
     counts = []
@@ -66,12 +71,14 @@ def watershedSegStack(seg_stack,num_lesions,postprocess_dir,cam_num):
         area, label_num = counts.pop(0)
         labels = np.where(labels == label_num, 0, labels)
 
-    # now all the labels will be 1-num_lesions
+    # now all the labels will be 1-num_lesion
     labels_unique = np.unique(labels)
     for i,lab_u in enumerate(labels_unique):
         labels = np.where(labels==lab_u,i,labels)
 
     label_map_ws = watershed(-distance, labels, mask=bin_img)
+    label_map_rgb = np.array(255.0*label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']),dtype='float32')
+    label_map_bgr = cv2.cvtColor(label_map_rgb,cv2.COLOR_RGB2BGR)
 
     label_map_save_pth = os.path.join(postprocess_dir, 'cam' + str(cam_num) + 'label_map.png')
     rgb_label_map = np.float32(255.0*label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']))
@@ -106,8 +113,10 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,resize_rat
 
         # current image is the previous segmentation AND the current segmentation
         # so that lesions don't randomly disappear
-        continuous_seg = seg_stack[i+1,:,:] + seg_stack[i,:,:]
+        seg_stack[i+1,:,:] = seg_stack[i+1,:,:] + seg_stack[i,:,:]
+        continuous_seg = seg_stack[i+1,:,:]
         curr_labels = np.where(continuous_seg>0, labels_ws, 0)
+        num_lesions_segmented = np.max(curr_labels)
         seg_image = 255.0*label2rgb(curr_labels,colors=['red','green','blue','purple','pink','black'])
 
         seg_image_mask = np.sum(seg_image,axis=2,keepdims=True)
@@ -121,7 +130,7 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,resize_rat
         cv2.imwrite(img_w_lesions_pth,cv2.cvtColor(img_w_lesions,cv2.COLOR_RGB2BGR))
 
         lesion_total = 0
-        for l in range(num_lesions):
+        for l in range(num_lesions_segmented):
                 area_str = 'Lesion #'
                 imageDF.at[df_index+l, area_str] = l+1
                 lesion_size = np.count_nonzero(np.where(curr_labels==l+1,l+1,0))
@@ -129,10 +138,12 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,resize_rat
                 imageDF.at[df_index+l, 'Adjusted Lesion Pixels'] = lesion_size * resize_ratio
                 lesion_total += lesion_size
 
-        lesion_avg = lesion_total / num_lesions
+        lesion_avg = lesion_total / num_lesions_segmented
 
-        for l in range(num_lesions):
-            imageDF.at[df_index+l, 'Avg Adj Pixel Size'] = lesion_avg * resize_ratio
+        # Only record Avg Adj Pixel Size one time per image for easier statistical analysis
+        #for l in range(num_lesions):
+        #    imageDF.at[df_index+l, 'Avg Adj Pixel Size'] = lesion_avg * resize_ratio
+        imageDF.at[df_index, 'Avg Adj Pixel Size'] = lesion_avg * resize_ratio
 
     return imageDF
 

@@ -1,4 +1,3 @@
-import cv2
 from tkinter import *
 import tkinter as tk
 from tkinter.ttk import *
@@ -21,12 +20,7 @@ import model.u_netDICE as u_netDICE
 import model.u_netDICE_Brown as u_netDICE_Brown
 
 import torch.nn as nn
-import imageio as io
 from PIL import Image
-from utils.transforms import vl2im, im2vl
-from skimage import filters
-from skimage.measure import label, regionprops
-from skimage.morphology import closing, square, remove_small_objects
 import datetime as dt
 import glob
 import warnings
@@ -475,10 +469,6 @@ class GUI(tk.Frame):
         if not os.path.exists( postprocess_dir ):
             os.makedirs( postprocess_dir )
 
-        txt_dir = os.path.join( root_dir,'txt' )
-        if not os.path.exists(txt_dir):
-            os.makedirs(txt_dir)
-
         imgsWLesions_dir = os.path.join( result_dir,'imgsWLesions' )
         if not os.path.exists(imgsWLesions_dir):
             os.makedirs(imgsWLesions_dir)
@@ -495,7 +485,7 @@ class GUI(tk.Frame):
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print( '\tUsing device:',device )
         if device.type == 'cuda':
-            print( '\t',pytorch.cuda.get_device_name(0) )
+            print( '\t',torch.cuda.get_device_name(0) )
 
 
         # choose pytorch model based off of model type
@@ -513,18 +503,16 @@ class GUI(tk.Frame):
         camera_ids = np.unique(self.imageDF['CameraID'])
         for cams_completed,camera_id in enumerate(camera_ids):
 
-            cameraDF = self.imageDF.loc[lambda df: df['CameraID']==camera_id, : ]
+            cameraDF = self.imageDF.loc[lambda df: df['CameraID']==camera_id, : ].reset_index(drop=True)
             new_camera = True
 
             leaf_seg_stack = []
             leaf_img_stack = []
-            start_image_df_idx = None
             leaf_mask = None
             row_mid = 0
             col_mid = 0
             half_side = 0
             resize_ratio = 0
-            cams_completed = 1
 
             for df_index,df_row in cameraDF.iterrows():
                 if df_index % self.num_lesions != 0:
@@ -562,9 +550,9 @@ class GUI(tk.Frame):
             cameraDF = postp.processSegStack(np.array(leaf_seg_stack),leaf_img_stack,self.num_lesions,label_map_ws,cameraDF,resize_ratio,postprocess_dir,imgsWLesions_dir)
 
             clean_df = postp.cleanDF(cameraDF)
-            clean_df.to_csv( result_file,mode='a',header=not os.path.exists(result_file,index=False))
+            clean_df.to_csv( result_file,mode='a',header=not os.path.exists(result_file),index=False )
+            print( '\tresult_file located :',result_file )
 
-        print( '\n\tresult_file located :',result_file )
         print( '\n****************************************************************************' )
         print( '***********************************DONE*************************************' )
         print( '****************************************************************************' )
