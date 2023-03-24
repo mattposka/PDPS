@@ -128,8 +128,8 @@ def process_tif( file ):
 
     img = rmBackground(img,leaf_mask)
 
-    print('max(leaf_mask) :',np.max(leaf_mask))
-    print('shape(leaf_mask) :',leaf_mask.shape)
+    #print('max(leaf_mask) :',np.max(leaf_mask))
+    #print('shape(leaf_mask) :',leaf_mask.shape)
     img = cv2.resize(img,(512,512))
     leaf_mask = cv2.resize(leaf_mask,(512,512))
 
@@ -138,6 +138,9 @@ def process_tif( file ):
     total_reshaped_pixels = 4 * half_side * half_side
     resize_ratio = total_reshaped_pixels/(512*512)
 
+
+    #normalized_img_pth = file.replace('.png','_norm.png')
+    #cv2.imwrite(normalized_img_pth,np.float32(cv2.cvtColor(np.float32(normalized_img),cv2.COLOR_RGB2BGR)))
     return img,normalized_img,leaf_mask,resize_ratio,half_side,row_mid,col_mid
 
 def quick_process_tif(file,leaf_mask,row_mid,col_mid,half_side):
@@ -157,4 +160,6 @@ def quick_process_tif(file,leaf_mask,row_mid,col_mid,half_side):
 
     normalized_img = normalizeImage(img)
 
+    #normalized_img_pth = file.replace('.png','_norm.png')
+    #cv2.imwrite(normalized_img_pth,np.float32(cv2.cvtColor(np.float32(normalized_img),cv2.COLOR_RGB2BGR)))
     return img,normalized_img,resize_ratio

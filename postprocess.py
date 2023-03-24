@@ -36,13 +36,16 @@ def watershedSegStack(seg_stack,num_lesions,postprocess_dir,cam_num):
         regions = regionprops(labels)
         for region in regions:
             # maybe use circularity as a filter too?
-            #circularity = 4*np.pi*region.area / (region.perimeter * region.perimeter)
+            # TODO use circularity as well
+            circularity = 4*np.pi*region.area / (region.perimeter * region.perimeter)
             x,y = region.centroid
-            if region.area > 500:
+            if region.area > 500 and circularity > 0.5:
                 if x > rows * 0.1 and x < rows * 0.9 and y > cols * 0.1 and y < cols * 0.9:
                     num_good_lesions_found += 1
                 else:
                     labels = np.where(labels==region.label,0,labels)
+            else:
+                labels = np.where(labels==region.label,0,labels)
         if num_good_lesions_found == num_lesions:
             best_labels = labels
             break
@@ -71,7 +74,8 @@ def watershedSegStack(seg_stack,num_lesions,postprocess_dir,cam_num):
     label_map_ws = watershed(-distance, labels, mask=bin_img)
 
     label_map_save_pth = os.path.join(postprocess_dir, 'cam' + str(cam_num) + 'label_map.png')
-    cv2.imwrite( label_map_save_pth,cv2.cvtCOLOR(255.0*label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']),cv2.COLOR_RGB2BGR) )
+    rgb_label_map = np.float32(255.0*label2rgb(label_map_ws,colors=['red','green','blue','purple','pink','black']))
+    cv2.imwrite( label_map_save_pth,cv2.cvtColor(rgb_label_map,cv2.COLOR_RGB2BGR) )
 
     return label_map_ws
 
@@ -83,9 +87,10 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,resize_rat
     seg_stack = np.concatenate((first_seg,seg_stack),axis=0)
 
     alpha = 0.4
+    alpha = 1.0
     for i in range(num_imgs):
         df_index = i*num_lesions
-        img_name = imageDF.loc[df_index,'Image Name']
+        img_name = imageDF.iloc[df_index].loc['Image Name']
         leaf_img = np.array(img_stack[i],dtype='float32') # leaf_img is RGB
 
         original_img = leaf_img.copy()
@@ -95,7 +100,9 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,resize_rat
         original_seg[:,:,2] = np.where(seg_stack[i+1,:,:]==1,0,original_seg[:,:,2])
         orig_seg_img = cv2.addWeighted(original_img,1-alpha,original_seg,alpha,0.0)
         orig_seg_img_pth = os.path.join(postprocess_dir, img_name.replace('.png','') + '_OSeg.png')
+        orig_img_pth = os.path.join(postprocess_dir, img_name.replace('.png','') + '_OImg.png')
         cv2.imwrite(orig_seg_img_pth,cv2.cvtColor(orig_seg_img,cv2.COLOR_RGB2BGR))
+        cv2.imwrite(orig_img_pth,cv2.cvtColor(original_img,cv2.COLOR_RGB2BGR))
 
         # current image is the previous segmentation AND the current segmentation
         # so that lesions don't randomly disappear

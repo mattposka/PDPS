@@ -14,6 +14,8 @@ import os
 import os.path as osp
 from utils.datasetsBrown import LEAFTrain
 from model.u_netDICE_Brown import UNetDICE
+from model.u_netDICE_BrownCE import UNetDICE_CE
+from model.u_net2 import UNet
 import timeit
 import math
 from tensorboardX import SummaryWriter
@@ -22,18 +24,27 @@ from utils.transforms import vl2im
 from utils.misc import Logger
 import sys
 
+#from utils.lovasz_losses import lovasz_softmax
+import torch.nn.functional as F
+from torchmetrics import JaccardIndex, Dice
+
 import kornia as K
 from kornia import morphology as morph
+
+from losses import *
+import torchgeometry as tgm
 
 start = timeit.default_timer()
 
 IMG_MEAN = np.array((96.25992, 109.307915 , 128.95671), dtype=np.float32)  # BGR
 
-RESTORE_FROM = None
+#RESTORE_FROM = '/home/mjp5595/LEAF_UNET_GREEN_SEP22.pth'
+#RESTORE_FROM = '/home/mjp5595/LEAF_UNET_GREEN_SEP22_CE.pth'
+RESTORE_FROM = ''
 BATCH_SIZE = 6
 MAX_EPOCH = 200
 #MAX_EPOCH = 500
-GPU = "2"
+GPU = "0"
 root_dir = '/data/leaf_train/green/Sep22/'
 DATA_LIST_PATH = root_dir + '/train.txt'
 VAL_LIST_PATH = root_dir + '/validation.txt'
@@ -50,8 +61,16 @@ POWER = 0.9
 RANDOM_SEED = 1234
 #TODO
 SAVE_PRED_EVERY = 50
-SNAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Sep22_Brown'+postfix
-IMGSHOT_DIR = root_dir + 'PatchNet/imgshots_Sep22_Brown'+postfix
+#SNAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Feb23_green_Focal'+postfix
+#SNAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Feb23_green_DICE2chan'+postfix
+#SNAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Feb23_green_Tversky'+postfix
+#SNAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Feb23_green_TverskyFocal'+postfix
+#SNAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Feb23_green_IoU'+postfix
+#SNAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Feb23_green_CE'+postfix
+#SNAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Feb23_green_WeightedCE'+postfix
+SNAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Feb23_green_SSIM'+postfix
+#SAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Feb23_green_Boundary'+postfix
+#SNAPSHOT_DIR = root_dir + 'PatchNet/snapshots_Feb23_green_Lovasz'+postfix
 WEIGHT_DECAY = 0.0005
 NUM_EXAMPLES_PER_EPOCH = 1016
 NUM_STEPS_PER_EPOCH = math.ceil(NUM_EXAMPLES_PER_EPOCH / float(BATCH_SIZE))
@@ -59,8 +78,8 @@ MAX_ITER = max(NUM_EXAMPLES_PER_EPOCH * MAX_EPOCH + 1,
                NUM_STEPS_PER_EPOCH * BATCH_SIZE * MAX_EPOCH + 1)
 if not os.path.exists(SNAPSHOT_DIR):
     os.makedirs(SNAPSHOT_DIR)
-if not os.path.exists(IMGSHOT_DIR):
-    os.makedirs(IMGSHOT_DIR)
+#if not os.path.exists(IMGSHOT_DIR):
+#    os.makedirs(IMGSHOT_DIR)
 
 LOG_PATH = SNAPSHOT_DIR + "/B"+format(BATCH_SIZE, "04d")+"E"+format(MAX_EPOCH, "04d")+"_NEW.log"
 sys.stdout = Logger(LOG_PATH, sys.stdout)
@@ -82,8 +101,6 @@ def get_arguments():
     parser.add_argument("--start-step", default=0, type=int)
     parser.add_argument("--is-training", default=False,
                         help="Whether to freeze BN layers, False for Freezing")
-    parser.add_argument("--img-dir", type=str, default=IMGSHOT_DIR,
-                        help="Where to save images of the model.")
     parser.add_argument("--num-workers", default=16)
     parser.add_argument("--final-step", type=int, default=int(NUM_STEPS_PER_EPOCH * MAX_EPOCH),
                         help="Number of training steps.")
@@ -132,27 +149,6 @@ def get_arguments():
 
 args = get_arguments()
 
-class SoftDiceLoss(nn.Module):
-    def __init__(self, weight=None, size_average=True):
-        super(SoftDiceLoss, self).__init__()
-
-    def forward(self, logits, targets): # pred,label
-        smooth = 1
-        num = targets.size(0)
-        """
-       I am assuming the model does not have sigmoid layer in the end. if that is the case, change torch.sigmoid(logits) to simply logits
-        """
-        targets = Variable(targets.float()).cuda()
-        probs = torch.sigmoid(logits)
-        m1 = probs.view(num, -1)
-        m2 = targets.view(num, -1)
-        intersection = (m1 * m2)
-
-        score = 2. * (intersection.sum(1) + smooth) / (m1.sum(1) + m2.sum(1) + smooth)
-        score = 1 - score.sum() / num
-        return score
-
-
 def lr_poly(base_lr, iter, max_iter, power):
     return base_lr * ((1 - float(iter) / max_iter) ** (power))
 
@@ -182,7 +178,9 @@ def main():
     cudnn.enabled = True
     torch.manual_seed(args.random_seed)
 
-    model = UNetDICE(args.num_classes)
+    #model = UNetDICE(args.num_classes)
+    #model = UNetDICE_CE(args.num_classes)
+    model = UNet(args.num_classes)
     model = torch.nn.DataParallel(model)
 
     optimizer = optim.SGD(model.parameters(),
@@ -259,10 +257,7 @@ def main():
 
     cnt = 0
     actual_step = args.start_step
-    val_loss_list = []
-    train_loss_list = []
-    val_acc_list = []
-    train_acc_list = []
+    best_val_loss = np.Inf
     while actual_step < args.final_step:
         iter_end = timeit.default_timer()
         for i_iter, batch in enumerate(trainloader):
@@ -271,30 +266,53 @@ def main():
             data_time.update(timeit.default_timer() - iter_end)
 
             images, labels, patch_name = batch
+            labels = labels.type(torch.int64)
 
             optimizer.zero_grad()
             adjust_learning_rate(optimizer, actual_step)
 
             pred = model(images)
-            labels = resize_target(labels, pred.size(2))
 
-            criterionSDL = SoftDiceLoss().cuda() # to put on cuda or cpu
-            lossSDL = criterionSDL(pred, labels)
+            #criterion = IoULoss().cuda() # to put on cuda or cpu
+            #criterion = TverskyLoss().cuda()
+            #criterion = FocalTverskyLoss().cuda()
+            #criterion = LovaszLoss().cuda()
+            #criterion = BoundaryLoss().cuda()
+            criterion = tgm.losses.SSIM(11, reduction='mean').cuda()
+            #criterion = tgm.losses.FocalLoss(alpha=0.5, gamma=2.0, reduction='mean').cuda()
+            #criterion = FocalLoss(alpha=5,gamma=2.0).cuda()
+            #criterion = FocalLoss().cuda() # to put on cuda or cpu
+            #criterion = SoftDiceLoss().cuda() # to put on cuda or cpu
+            #criterion = torch.nn.CrossEntropyLoss().cuda() # to put on cuda or cpu
+            #criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1.0,12.0])).cuda() # to put on cuda or cpu
 
-            losses.update(lossSDL.item(), pred.size(0))
+            pred = torch.softmax(pred,axis=1)
+            labels = torch.nn.functional.one_hot(labels)
+            labels = labels.transpose(1,3)
+            labels = labels.type(torch.float32)
+            loss = criterion(pred,labels.cuda())
+            #print('pred.shape :',pred.shape)
+            #loss = criterion(pred,labels.cuda())
+            #pred = torch.softmax(pred,axis=1)[:,1,:,:]
+            #pred = pred.view(b,1,h,w)
+            #labels = labels.type(torch.float32)
+            #labels = labels.view(b,1,h,w)
+            #loss = criterion(pred, labels.cuda())
+
+            losses.update(loss.item(), pred.size(0))
 
             acc = _pixel_accuracy(pred.data.cpu().numpy(), labels.data.cpu().numpy())
             accuracy.update(acc, pred.size(0))
             
-            lossSDL.backward()
+            loss.backward()
             optimizer.step()
 
+
             #########################################################################################3
-            STOP_EARLY = False
-            EPOCHS_BEFORE_STOPPING = 8
             if actual_step % NUM_STEPS_PER_EPOCH == 0:
                 with torch.no_grad():
                     val_loss = 0. 
+                    val_acc = 0
                     for val_i_iter, val_batch in enumerate(valloader):
 
                         val_images, val_labels, patch_name = val_batch
@@ -303,25 +321,35 @@ def main():
 
                         val_labels = resize_target(val_labels, val_pred.size(2))
 
-                        v_lossSDL = criterionSDL(val_pred, val_labels)
+                        val_pred = torch.softmax(val_pred,axis=1)
+                        val_labels = torch.nn.functional.one_hot(val_labels)
+                        val_labels = val_labels.transpose(1,3)
+                        val_labels = val_labels.type(torch.float32)
+                        v_loss = criterion(val_pred,val_labels.cuda())
+                        #v_loss = criterion(val_pred,val_labels.cuda())
+                        #v_loss = criterion(torch.softmax(val_pred,axis=1)[:,1,:,:],val_labels.cuda())
+                        #val_pred = torch.softmax(val_pred,axis=1)[:,1,:,:]
+                        #b,h,w = val_pred.shape
+                        #val_pred = val_pred.view(b,1,h,w)
+                        #val_labels = val_labels.type(torch.float32)
+                        #val_labels = val_labels.view(b,1,h,w)
+                        #v_loss = criterion(val_pred, val_labels.cuda())
 
-                        v_loss = v_lossSDL
                         val_loss += v_loss.item()
 
-                        val_acc = _pixel_accuracy(val_pred.cpu().numpy(), val_labels.data.cpu().numpy())
-                        
-                val_loss_list.append(val_loss)
-                train_loss_list.append(losses.val)
-                val_acc_list.append(val_acc)
-                train_acc_list.append(accuracy.val)
-                
-                #if len(val_loss_list) > EPOCHS_BEFORE_STOPPING:
-                #    if val_loss_list[-1] > val_loss_list[-1*(EPOCHS_BEFORE_STOPPING+1)]:
-                #        STOP_EARLY = True
-                #        print('STOPPING EARLY!!!!!!!')
-                #    print('Val Loss :',val_loss_list[-1*(EPOCHS_BEFORE_STOPPING+1):])
-            #########################################################################################3
+                        val_acc += _pixel_accuracy(val_pred.cpu().numpy(), val_labels.data.cpu().numpy())
+                    
+                if val_loss < best_val_loss:
+                    print('saving the best model so far ...\tprev best val loss : {}\t curr best val loss : {}'.format(best_val_loss,val_loss))
+                    torch.save(model.state_dict(),osp.join(args.snapshot_dir,'best_model.pth'))
+                    best_val_loss = val_loss
 
+                writer.add_scalar("train/train_loss", losses.avg, actual_step)
+                writer.add_scalar("train/pixel_accuracy", accuracy.avg, actual_step)
+                writer.add_scalar("lr", optimizer.param_groups[0]['lr'], actual_step)
+                writer.add_scalar("val/train_loss", val_loss, actual_step)
+                writer.add_scalar("val/pixel_accuracy", val_acc, actual_step)
+                            
             batch_time.update(timeit.default_timer() - iter_end)
             iter_end = timeit.default_timer()
 
@@ -333,65 +361,10 @@ def main():
                       'Pixel Accuracy {accuracy.val:.3f} ({accuracy.avg:.3f})'.format(
                     cnt, actual_step, args.final_step, batch_time=batch_time,
                     data_time=data_time, loss=losses, accuracy=accuracy))
-                writer.add_scalar("train_loss", losses.avg, actual_step)
-                writer.add_scalar("pixel_accuracy", accuracy.avg, actual_step)
-                writer.add_scalar("lr", optimizer.param_groups[0]['lr'], actual_step)
 
-                val_loss_list_array = np.array(val_loss_list)
-                train_loss_list_array = np.array(train_loss_list)
-                val_acc_list_array = np.array(val_acc_list)
-                train_acc_list_array = np.array(train_acc_list)
-
-                np.savetxt(args.snapshot_dir+'val_loss_log.txt',val_loss_list_array)
-                np.savetxt(args.snapshot_dir+'train_loss_log.txt',train_loss_list_array)
-                np.savetxt(args.snapshot_dir+'val_acc_log.txt',val_acc_list_array)
-                np.savetxt(args.snapshot_dir+'train_acc_log.txt',train_acc_list_array)
-
-
-            #if actual_step % args.save_img_freq == 0:
-            #    msk_size = pred.size(2)
-            #    image = np.transpose(image,(1, 2, 0))
-            #    image = cv2.resize(image, (msk_size, msk_size), interpolation=cv2.INTER_NEAREST)
-            #    image2show = image[:,:,:3]
-            #    image2show = image2show*255
-            #    label = labels.data.cpu().numpy()[0]
-            #    label = vl2im(label)
-
-
-            #    #single_pred = pred.data.cpu().numpy()[0].argmax(axis=0)
-            #    #single_pred = vl2im(single_pred)
-            #    single_pred = np.where(pred.data.cpu().numpy()[0]>=0,1,0)
-            #    #print('single_pred.shape :',single_pred.shape)
-            #    single_pred = vl2im(single_pred)
-
-            #    new_im = Image.new('RGB', (msk_size * 3, msk_size))
-            #    new_im.paste(Image.fromarray(image2show.astype('uint8'), 'RGB'), (0, 0))
-            #    new_im.paste(Image.fromarray(single_pred.astype('uint8'), 'RGB'), (msk_size, 0))
-            #    new_im.paste(Image.fromarray(label.astype('uint8'), 'RGB'), (msk_size * 2, 0))
-            #    new_im_name = 'B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '_' + patch_name[0].replace('.npy','.png')
-            #    new_im_file = os.path.join(args.img_dir, new_im_name)
-            #    new_im.save(new_im_file)
-
-            if actual_step % args.save_pred_every == 0 and cnt != 0:
-                print('taking snapshot ...')
-                torch.save({'example': actual_step * args.batch_size,
-                            'state_dict': model.state_dict()},
-                           osp.join(args.snapshot_dir,
-                                    'LEAF_UNET_B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '.pth'))
             if actual_step >= args.final_step:
                 break
-            if STOP_EARLY == True:
-                break
             cnt += 1
-        if STOP_EARLY == True:
-            break
-
-
-    print('save the final model ...')
-    torch.save({'example': actual_step * args.batch_size,
-                'state_dict': model.state_dict()},
-               osp.join(args.snapshot_dir,
-                        'LEAF_UNET_B' + format(args.batch_size, "04d") + '_S' + format(actual_step, "06d") + '_FINAL.pth'))
 
     end = timeit.default_timer()
     print(end - start, 'seconds')
@@ -399,7 +372,8 @@ def main():
 def _pixel_accuracy(pred, target):
     accuracy_sum = 0.0
     for i in range(0, pred.shape[0]):
-        out = np.where(pred[i]>=0,1,0)
+        #out = np.where(pred[i]>=0,1,0)
+        out = np.argmax(pred[i],axis=0)
         accuracy = np.sum(out == target[i], dtype=np.float32) / out.size
         accuracy_sum += accuracy
     return accuracy_sum / args.batch_size

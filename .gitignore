@@ -12,3 +12,9 @@ default*
 pytorch_models/*.pth
 *.pth
 __pycache__/
+
+l1_annotations/
+test_dir*
+models_to_test/
+test_imgs
+*.p
