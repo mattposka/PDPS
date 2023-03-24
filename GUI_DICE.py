@@ -18,6 +18,7 @@ import postprocess as postp
 
 import model.u_netDICE as u_netDICE
 import model.u_netDICE_Brown as u_netDICE_Brown
+import model.u_net2 as u_net
 
 import torch.nn as nn
 from PIL import Image
@@ -123,7 +124,7 @@ class GUI(tk.Frame):
         self.modelFrame = tk.Frame( root,bg=bg,borderwidth=10,relief='ridge' )
 
         self.modelTypeVar = tk.StringVar( self.modelFrame )
-        self.modelTypeVar.set( 'LEAF_GREEN_mIoU' )
+        self.modelTypeVar.set( 'Leaf DICE' )
         models_available_list = self.getModelsAvailable()
         #self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelFrame,self.modelTypeVar,*models_available_list )
         self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelTypeVar,*models_available_list )
@@ -380,15 +381,15 @@ class GUI(tk.Frame):
         seg_current = 0
         fg = self.segmentationFrameFG
 
-        self.previousbuttonSeg = tk.Button( self.segmentationFrame,text='<-',command=lambda: self.move(-1),bg=fg )
-        self.nextbuttonSeg = tk.Button( self.segmentationFrame,text='->',command=lambda: self.move(+1),bg=fg )
-
         self.original_seg = Image.open( segLst[0] )
         self.image_seg = ImageTk.PhotoImage( self.original )
         self.canvas_seg = Canvas( self.segmentationFrame,bd=0,highlightthickness=0 )
         self.canvasArea_seg = self.canvas.create_image( 0,0,image=self.image_seg,anchor=NE )
         self.canvas_seg.grid( row=0,columnspan=2,sticky=W+E+N+S)
         self.canvas_seg.bind( "<Configure>",self.resizeSeg )
+
+        self.previousbuttonSeg = tk.Button( self.segmentationFrame,text='<-',command=lambda: self.move(-1),bg=fg )
+        self.nextbuttonSeg = tk.Button( self.segmentationFrame,text='->',command=lambda: self.move(+1),bg=fg )
 
         self.segmentationFrame.update()
 
@@ -411,9 +412,6 @@ class GUI(tk.Frame):
         for m in models_available:
             models_available_list.append( m.split('/')[-1].split('\\')[-1].replace('.pth','') )
 
-        modelTypeLabel = tk.Label( self.modelFrame,text='Select Model to Use',anchor='center' )
-        modelTypeLabel.grid( column=0,row=0,sticky=''  )
-
         return models_available_list
 
     # saves description called /rootName/resultFiles/description.txt
@@ -435,7 +433,8 @@ class GUI(tk.Frame):
 
         description_pth = os.path.join( results_dir,'description.txt' )
 
-        description = self.e1.get('1.0', END)
+        #description = self.e1.get('1.0', END)
+        description = self.e1.get()
         with open(description_pth, 'a') as file:
             file.write(str(description) + '\n')
         print('\nDescription saved')
@@ -539,16 +538,16 @@ class GUI(tk.Frame):
         self.imageFrame.update()
 
     def resizeSeg( self,event_seg ):
-        size = (event_seg.width, event_seg.height)
-        resized = self.original_seg.resize( size,Image.ANTIALIAS )
-        self.image_seg = ImageTk.PhotoImage( resized )
+        size_seg = (event_seg.width, event_seg.height)
+        resized_seg = self.original_seg.resize( size_seg,Image.ANTIALIAS )
+        self.image_seg = ImageTk.PhotoImage( resized_seg )
         self.canvas_seg.create_image( 0,0,image=self.image_seg,anchor=NW )
 
-        canvas_height = self.canvas_seg.winfo_height()
-        canvas_width = self.canvas_seg.winfo_width()
+        canvas_height_seg = self.canvas_seg.winfo_height()
+        canvas_width_seg = self.canvas_seg.winfo_width()
 
-        self.previousbuttonSeg.place(x=0,y=canvas_height,anchor='sw')
-        self.nextbuttonSeg.place(x=canvas_width,y=canvas_height,anchor='se')
+        self.previousbuttonSeg.place(x=0,y=canvas_height_seg,anchor='sw')
+        self.nextbuttonSeg.place(x=canvas_width_seg,y=canvas_height_seg,anchor='se')
         self.segmentationFrame.update()
 
     def move(self, delta):
@@ -595,7 +594,7 @@ class GUI(tk.Frame):
         savedir_label = self.saveDir.split('\\')[-1].split('/')[-1]
 
         self.selectsavedir.destroy()
-        self.savedirset = tk.Label( self.dirFrame,text=savedir_label,bg=fg,wraplength=int(0.9*(self.dirFrameFG.winfo_width())) )
+        self.savedirset = tk.Label( self.dirFrame,text=savedir_label,bg=fg,wraplength=int(0.9*(self.dirFrame.winfo_width())) )
         self.savedirset.grid( row=0,column=0,sticky='' )
 
     #def setMetaFile(self):
@@ -606,10 +605,10 @@ class GUI(tk.Frame):
         fg = self.dirFrameFG
         self.metaFile = filedialog.askopenfilename( filetypes=( ('excel files','*.xlsx'),('csv files','*.csv'),('all files','*.*') ), initialdir='/', title='Select Experimental Design File')
         self.metaFileVar.set( self.metaFile )
-        metafile_label = self.metaFile.split('\\')[-1].split('/')[-1]
+        metafile_label = self.metaFile.split('\\')[-1].split('/')[-1].strip('.xlsx')
 
         self.selectmetafile.destroy()
-        self.selectmetaset = tk.Label( self.dirFrame,text=metafile_label,bg=fg,wraplength=int(0.9*(self.dirFrameFG.winfo_width())) )
+        self.selectmetaset = tk.Label( self.dirFrame,text=metafile_label,bg=fg,wraplength=int(0.9*(self.dirFrame.winfo_width())) )
         self.selectmetaset.grid( row=1,column=0,sticky='' )
 
     # sorts images by time and constructs a dataframe to hold them
@@ -639,7 +638,8 @@ class GUI(tk.Frame):
 
     # Formats the original dataframe based off of the images selected
     def formatDF( self, ):
-        description = self.e1.get('1.0', END)
+        #description = self.e1.get('1.0', END)
+        description = self.e1.get()
         self.imageDF['Avg Adj Pixel Size'] = ''
         self.imageDF['Description'] = description
 
@@ -714,7 +714,7 @@ class GUI(tk.Frame):
     #TODO Test what n does
     def process(self,n=''):
 
-        n = int( self.gpuNumEntry.get() )
+        n = int( -1 )
         if n != -1:
             os.environ["CUDA_VISIBLE_DEVICES"] = n
 
@@ -767,13 +767,17 @@ class GUI(tk.Frame):
         # choose pytorch model based off of model type
         NUM_CLASSES = 2
         model_pth = os.path.join( model_dir,( self.modelTypeVar.get() ) )
-        model = u_netDICE_Brown.UNetDICE(NUM_CLASSES)
+        model_pth = model_pth + ".pth"
+        #model = u_netDICE_Brown.UNetDICE(NUM_CLASSES)
+        model = u_net.UNet(NUM_CLASSES)
         model = nn.DataParallel(model)
         model.to(device)
-        saved_state_dict = torch.load(model_pth, map_location=lambda storage, loc: storage)
+        #saved_state_dict = torch.load(model_pth, map_location=lambda storage, loc: storage)
+        saved_state_dict = torch.load(model_pth)
         print("\nModel restored from:", model_pth)
 
-        model.load_state_dict(saved_state_dict['state_dict'])
+        #model.load_state_dict(saved_state_dict['state_dict'])
+        model.load_state_dict(saved_state_dict)
         model.eval()
 
         camera_ids = np.unique(self.imageDF['CameraID'])
@@ -813,8 +817,11 @@ class GUI(tk.Frame):
                     image_tensor = torch.from_numpy(np.expand_dims(formatted_img,axis=0))
                     output = model(image_tensor).to(device)
 
+                    if len(output.shape) > 3:
+                        output = torch.argmax(output,axis=1)
+
                     msk = torch.squeeze(output).data.cpu().numpy()
-                    msk = np.where(msk>0,1,0)
+                    #msk = np.where(msk>0,1,0)
 
                 leaf_seg_stack.append(msk)
                 leaf_img_stack.append(resized_image)
@@ -832,6 +839,11 @@ class GUI(tk.Frame):
         print( '\n****************************************************************************' )
         print( '***********************************DONE*************************************' )
         print( '****************************************************************************' )
+
+        segLst = glob.glob(imgsWLesions_dir + '/*lesions.png')
+        self.openSeg(segLst=segLst)
+
+
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -94,7 +94,7 @@ def processSegStack(seg_stack,img_stack,num_lesions,labels_ws,imageDF,resize_rat
     seg_stack = np.concatenate((first_seg,seg_stack),axis=0)
 
     alpha = 0.4
-    alpha = 1.0
+    #alpha = 1.0
     for i in range(num_imgs):
         df_index = i*num_lesions
         img_name = imageDF.iloc[df_index].loc['Image Name']
