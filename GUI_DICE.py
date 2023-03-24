@@ -60,169 +60,356 @@ class GUI(tk.Frame):
 
         defaultFont = tkFont.nametofont( 'TkDefaultFont' )
         defaultTextFont = tkFont.nametofont( 'TkTextFont' )
-        defaultFont.configure( size=24 )
-        defaultTextFont.configure( size=24 )
+        defaultFont.configure( size=30 )
+        defaultTextFont.configure( size=20 )
 
         self.parent.grid_rowconfigure( 0,weight=3 )
-        self.parent.grid_rowconfigure( 1,weight=1 )
+        self.parent.grid_rowconfigure( (1,2),weight=1 )
         self.parent.grid_columnconfigure( (0,1,2,3),weight=1 )
 
-        self.setImageFrame() 
-        self.setModelFrame()
-        self.setDirFrame()
-        self.setLesionFrame()
-        self.setInnocFrame()
-        self.setMetaFrame()
-        self.setDescFrame()
-        self.setRunFrame()
+        bg1 = '#B6CA53'
+        fg1 = '#C4D473'
+        bg2 = '#DDD755'
+        fg2 = '#E7E288'
+        bg3 = '#88B668'
+        fg3 = '#CBDFBD'
+        self.setImageFrame(bg=bg1,fg=fg1) 
+        self.setModelFrame(bg=bg2,fg=fg2)
+        self.setLesionFrame(bg=bg3,fg=fg3)
+        self.setSaveFolderFrame(bg=bg3,fg=fg3)
+        self.setInnocFrame(bg=bg1,fg=fg1)
+        self.setDescFrame(bg=bg2,fg=fg2)
+        self.setDirFrame(bg=bg2,fg=fg2)
+        self.setSegmentationFrame(bg=bg1,fg=fg1)
+        self.setRunFrame(bg=bg3,fg=fg3)
 
-    def setImageFrame( self, ):
-        self.imageFrame = tk.Frame( root,bg='#65C1E8',borderwidth=15,relief='ridge' )
-        self.nextbutton()
-        self.previousbutton()
+    #def setImageFrame( self, ):
+    #    self.imageFrame = tk.Frame( root,bg='#65C1E8',borderwidth=15,relief='ridge' )
+    #    self.nextbutton()
+    #    self.previousbutton()
 
-        self.imageFrame.grid_rowconfigure( (0,1,3),weight=1 )
-        self.imageFrame.grid_rowconfigure( (2,),weight=3 )
-        self.imageFrame.grid_columnconfigure( (0,1),weight=1 )
+    #    self.imageFrame.grid_rowconfigure( (0,1,3),weight=1 )
+    #    self.imageFrame.grid_rowconfigure( (2,),weight=3 )
+    #    self.imageFrame.grid_columnconfigure( (0,1),weight=1 )
+    #    self.imageFrame.grid( row=0,column=0,sticky='nsew' )
+
+    #    self.selectbutton()
+
+    def setImageFrame( self,bg,fg ):
+        self.imageFrame = tk.Frame( root,bg=bg,borderwidth=10,relief='ridge' )
+
+        self.imageFrame.grid_rowconfigure( (0),weight=5 )
+        #self.imageFrame.grid_rowconfigure( (1),weight=1 )
+        self.imageFrame.grid_columnconfigure( (0),weight=1 )
         self.imageFrame.grid( row=0,column=0,sticky='nsew' )
 
-        self.selectbutton()
+        self.selectbutton(fg)
 
-    def setModelFrame( self, ):
-        self.modelFrame = tk.Frame( root,bg='#D85B63',borderwidth=15,relief='ridge' )
+    #def setModelFrame( self, ):
+    #    self.modelFrame = tk.Frame( root,bg='#D85B63',borderwidth=15,relief='ridge' )
+
+    #    self.modelTypeVar = tk.StringVar( self.modelFrame )
+    #    self.modelTypeVar.set( 'LEAF_UNET_BROWN_SEP22.pth' )
+    #    models_available_list = self.getModelsAvailable()
+    #    #self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelFrame,self.modelTypeVar,*models_available_list )
+    #    self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelTypeVar,*models_available_list )
+    #    self.modelTypeMenu.grid( row=1,column=0 )
+
+    #    self.modelFrame.grid_rowconfigure( (0,1),weight=1 )
+    #    self.modelFrame.grid_columnconfigure( 0,weight=1 )
+    #    self.modelFrame.grid( row=1,column=0,sticky='nsew' )
+
+    def setModelFrame( self,bg,fg ):
+        self.modelFrame = tk.Frame( root,bg=bg,borderwidth=10,relief='ridge' )
 
         self.modelTypeVar = tk.StringVar( self.modelFrame )
-        self.modelTypeVar.set( 'LEAF_UNET_BROWN_SEP22.pth' )
+        self.modelTypeVar.set( 'LEAF_GREEN_mIoU' )
         models_available_list = self.getModelsAvailable()
         #self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelFrame,self.modelTypeVar,*models_available_list )
         self.modelTypeMenu = tk.OptionMenu( self.modelFrame,self.modelTypeVar,*models_available_list )
-        self.modelTypeMenu.grid( row=1,column=0 )
+        self.modelTypeMenu.config(bg=fg)
+        self.modelTypeMenu.grid( row=0,column=0 )
 
-        self.modelFrame.grid_rowconfigure( (0,1),weight=1 )
+        self.modelFrame.grid_rowconfigure( (0),weight=1 )
         self.modelFrame.grid_columnconfigure( 0,weight=1 )
         self.modelFrame.grid( row=1,column=0,sticky='nsew' )
 
-    def setDirFrame( self, ):
-        self.dirFrame = tk.Frame( root,bg='#D680AD',borderwidth=15,relief='ridge' )
-        folderLabel = tk.Label( self.dirFrame,text='Set Save Folder Name :',anchor='center' )
-        folderLabel.grid( row=0,column=0,sticky=''  )
-        self.saveNameEntry = tk.Entry( self.dirFrame )
+    #def setDirFrame( self, ):
+    #    self.dirFrame = tk.Frame( root,bg='#D680AD',borderwidth=15,relief='ridge' )
+    #    folderLabel = tk.Label( self.dirFrame,text='Set Save Folder Name :',anchor='center' )
+    #    folderLabel.grid( row=0,column=0,sticky=''  )
+    #    self.saveNameEntry = tk.Entry( self.dirFrame )
+    #    self.saveNameEntry.insert( END,'default' )
+    #    self.saveNameEntry.grid( row=1,column=0,sticky='' )
+
+    #    separator = Separator( self.dirFrame,orient='horizontal' )
+    #    separator.grid( row=2,sticky='ew' )
+
+    #    self.dirFrame.grid_rowconfigure( (0,1,2,3,4,5),weight=1 )
+    #    self.dirFrame.grid_columnconfigure( (0),weight=1 )
+    #    self.dirFrame.grid( row=0,column=1,sticky='nsew' )
+
+    #    self.selectsavedir()
+
+    def setSaveFolderFrame( self,bg,fg ):
+        self.saveFolderFrame = tk.Frame( root,bg=bg,borderwidth=10,relief='ridge' )
+        #folderLabel = tk.Label( self.saveFolderFrame,text='Set Save Folder:',anchor='center' )
+        folderLabel = tk.Label( self.saveFolderFrame,text='Save Folder:',bg=bg )
+        folderLabel.grid( row=0,column=0,sticky='s'  )
+        self.saveNameEntry = tk.Entry( self.saveFolderFrame,width=15 )
         self.saveNameEntry.insert( END,'default' )
-        self.saveNameEntry.grid( row=1,column=0,sticky='' )
+        self.saveNameEntry.grid( row=1,column=0,sticky='n' )
+        self.saveFolderFrame.grid_rowconfigure( (0,1),weight=1 )
+        self.saveFolderFrame.grid_columnconfigure( (0),weight=1 )
+        self.saveFolderFrame.grid( row=0,column=1,sticky='nsew' )
 
-        separator = Separator( self.dirFrame,orient='horizontal' )
-        separator.grid( row=2,sticky='ew' )
 
-        self.dirFrame.grid_rowconfigure( (0,1,2,3,4,5),weight=1 )
-        self.dirFrame.grid_columnconfigure( (0),weight=1 )
-        self.dirFrame.grid( row=0,column=1,sticky='nsew' )
+    #def setLesionFrame( self, ):
+    #    self.lesionFrame = tk.Frame( root,bg='#5C5C5C',borderwidth=15,relief='ridge' )
+    #    lesionLabel = tk.Label( self.lesionFrame,text='Number of Lesions',anchor='center' )
+    #    lesionLabel.grid( row=0,column=0,sticky=''  )
 
-        self.selectsavedir()
+    #    self.numberOfLesionsEntry = tk.Entry( self.lesionFrame )
+    #    self.numberOfLesionsEntry.insert( END,'4' )
+    #    self.numberOfLesionsEntry.grid( row=1,column=0,sticky='' )
 
-    def setLesionFrame( self, ):
-        self.lesionFrame = tk.Frame( root,bg='#5C5C5C',borderwidth=15,relief='ridge' )
-        lesionLabel = tk.Label( self.lesionFrame,text='Number of Lesions',anchor='center' )
-        lesionLabel.grid( row=0,column=0,sticky=''  )
+    #    self.lesionFrame.grid_rowconfigure( (0,1),weight=1 )
+    #    self.lesionFrame.grid_columnconfigure( 0,weight=1 )
+    #    self.lesionFrame.grid( row=1,column=1,sticky='nsew' )
 
-        self.numberOfLesionsEntry = tk.Entry( self.lesionFrame )
+    def setLesionFrame( self,bg,fg ):
+        self.lesionFrame = tk.Frame( root,bg=bg,borderwidth=10,relief='ridge' )
+        lesionLabel = tk.Label( self.lesionFrame,text='Num Lesions',anchor='center',bg=bg )
+        #lesionLabel.grid( row=0,column=0,sticky='ew'  )
+        lesionLabel.pack( side='left' )
+
+        self.numberOfLesionsEntry = tk.Entry( self.lesionFrame,width=2 )
         self.numberOfLesionsEntry.insert( END,'4' )
-        self.numberOfLesionsEntry.grid( row=1,column=0,sticky='' )
+        #self.numberOfLesionsEntry.grid( row=0,column=1,sticky='w' )
+        self.numberOfLesionsEntry.pack( side='left' )
 
-        self.lesionFrame.grid_rowconfigure( (0,1),weight=1 )
-        self.lesionFrame.grid_columnconfigure( 0,weight=1 )
-        self.lesionFrame.grid( row=1,column=1,sticky='nsew' )
+        #self.lesionFrame.grid_rowconfigure( (0),weight=1 )
+        #self.lesionFrame.grid_columnconfigure( (0,1),weight=1 )
+        self.lesionFrame.grid( row=2,column=0,sticky='nsew' )
 
-    def setInnocFrame( self, ):
-        self.innocFrame = tk.Frame( root,bg='#C0BA80',borderwidth=15,relief='ridge' )
+    #def setInnocFrame( self, ):
+    #    self.innocFrame = tk.Frame( root,bg='#C0BA80',borderwidth=15,relief='ridge' )
 
-        self.innocTitle = tk.Label( self.innocFrame,text='Set Innoculation start Time',anchor='center' )
-        self.innocTitle.grid( columnspan=2,row=0,sticky=''  )
+    #    self.innocTitle = tk.Label( self.innocFrame,text='Set Innoculation start Time',anchor='center' )
+    #    self.innocTitle.grid( columnspan=2,row=0,sticky=''  )
 
-        self.innocYearLabel = tk.Label( self.innocFrame,text='Year :' )
-        self.innocYearLabel.grid( row=1,column=0,sticky='e' )
-        self.innocYearTimeVar = tk.Entry( self.innocFrame )
+    #    self.innocYearLabel = tk.Label( self.innocFrame,text='Year :' )
+    #    self.innocYearLabel.grid( row=1,column=0,sticky='e' )
+    #    self.innocYearTimeVar = tk.Entry( self.innocFrame )
+    #    self.innocYearTimeVar.insert( END,'2000' )
+    #    self.innocYearTimeVar.grid( row=1,column=1,sticky='w' )
+
+    #    self.innocMonthLabel = tk.Label( self.innocFrame,text='Month :' )
+    #    self.innocMonthLabel.grid( row=2,column=0,sticky='e' )
+    #    self.innocMonthTimeVar = tk.Entry( self.innocFrame )
+    #    self.innocMonthTimeVar.insert( END,'2' )
+    #    self.innocMonthTimeVar.grid( row=2,column=1,sticky='w' )
+
+    #    self.innocDayLabel = tk.Label( self.innocFrame,text='Day :' )
+    #    self.innocDayLabel.grid( row=3,column=0,sticky='e' )
+    #    self.innocDayTimeVar = tk.Entry( self.innocFrame )
+    #    self.innocDayTimeVar.insert( END,'2' )
+    #    self.innocDayTimeVar.grid( row=3,column=1,sticky='w' )
+
+    #    self.innocHourLabel = tk.Label( self.innocFrame,text='Hour :' )
+    #    self.innocHourLabel.grid( row=4,column=0,sticky='e' )
+    #    self.innocHourTimeVar = tk.Entry( self.innocFrame )
+    #    self.innocHourTimeVar.insert( END,'2' )
+    #    self.innocHourTimeVar.grid( row=4,column=1,sticky='w' )
+
+    #    self.innocFrame.grid_rowconfigure( (0,1,2,3,4),weight=1 )
+    #    self.innocFrame.grid_columnconfigure( (0,1),weight=1 )
+    #    self.innocFrame.grid( row=0,rowspan=1,column=2,sticky='nsew' )
+
+    def setInnocFrame( self,bg,fg ):
+        self.innocFrame = tk.Frame( root,bg=bg,borderwidth=10,relief='ridge' )
+
+        self.innocTimeLabel = tk.Label( self.innocFrame,text='Innoculation Time',anchor='center',bg=bg )
+        self.innocTimeLabel.grid( row=0,column=0,columnspan=4,sticky='s' )
+        
+        self.innocYear = tk.Frame( self.innocFrame,bg=bg,borderwidth=0)
+        self.innocYearLabel = tk.Label( self.innocYear,text='Year',bg=bg)
+        self.innocYearLabel.grid( row=0,column=0,stick='s' )
+        self.innocYearTimeVar = tk.Entry( self.innocYear,width=4 )
         self.innocYearTimeVar.insert( END,'2000' )
-        self.innocYearTimeVar.grid( row=1,column=1,sticky='w' )
+        self.innocYearTimeVar.grid( row=1,column=0,sticky='e' )
+        self.innocYear.grid( row=1,column=0,sticky='n' )
 
-        self.innocMonthLabel = tk.Label( self.innocFrame,text='Month :' )
-        self.innocMonthLabel.grid( row=2,column=0,sticky='e' )
-        self.innocMonthTimeVar = tk.Entry( self.innocFrame )
+        self.innocMonth = tk.Frame( self.innocFrame,bg=bg,borderwidth=0)
+        self.innocMonthLabel = tk.Label( self.innocMonth,text='Month',bg=bg)
+        self.innocMonthLabel.grid( row=0,column=0,stick='' )
+        self.innocMonthTimeVar = tk.Entry( self.innocMonth,width=2 )
         self.innocMonthTimeVar.insert( END,'2' )
-        self.innocMonthTimeVar.grid( row=2,column=1,sticky='w' )
+        self.innocMonthTimeVar.grid( row=1,column=0,sticky='' )
+        self.innocMonth.grid( row=1,column=1,sticky='n' )
 
-        self.innocDayLabel = tk.Label( self.innocFrame,text='Day :' )
-        self.innocDayLabel.grid( row=3,column=0,sticky='e' )
-        self.innocDayTimeVar = tk.Entry( self.innocFrame )
+        self.innocDay = tk.Frame( self.innocFrame,bg=bg,borderwidth=0)
+        self.innocDayLabel = tk.Label( self.innocDay,text='Day',bg=bg)
+        self.innocDayLabel.grid( row=0,column=0,stick='' )
+        self.innocDayTimeVar = tk.Entry( self.innocDay,width=2 )
         self.innocDayTimeVar.insert( END,'2' )
-        self.innocDayTimeVar.grid( row=3,column=1,sticky='w' )
+        self.innocDayTimeVar.grid( row=1,column=0,sticky='' )
+        self.innocDay.grid( row=1,column=2,sticky='n' )
 
-        self.innocHourLabel = tk.Label( self.innocFrame,text='Hour :' )
-        self.innocHourLabel.grid( row=4,column=0,sticky='e' )
-        self.innocHourTimeVar = tk.Entry( self.innocFrame )
+        self.innocHour = tk.Frame( self.innocFrame,bg=bg,borderwidth=0)
+        self.innocHourLabel = tk.Label( self.innocHour,text='Hour',bg=bg)
+        self.innocHourLabel.grid( row=0,column=0,stick='' )
+        self.innocHourTimeVar = tk.Entry( self.innocHour,width=2 )
         self.innocHourTimeVar.insert( END,'2' )
-        self.innocHourTimeVar.grid( row=4,column=1,sticky='w' )
+        self.innocHourTimeVar.grid( row=1,column=0,sticky='' )
+        self.innocHour.grid( row=1,column=3,sticky='n' )
 
-        self.innocFrame.grid_rowconfigure( (0,1,2,3,4),weight=1 )
-        self.innocFrame.grid_columnconfigure( (0,1),weight=1 )
-        self.innocFrame.grid( row=0,rowspan=1,column=2,sticky='nsew' )
+        self.innocFrame.grid_rowconfigure( (0,1),weight=1 )
+        self.innocFrame.grid_columnconfigure( (0,1,2,3),weight=1 )
+        self.innocFrame.grid( row=1,column=1,columnspan=2,sticky='nsew' )
 
-    def setMetaFrame( self, ):
-            self.metaFrame = tk.Frame( root,bg='#C0BA80',borderwidth=15,relief='ridge' )
+    #def setMetaFrame( self, ):
+    #        self.metaFrame = tk.Frame( root,bg='#C0BA80',borderwidth=15,relief='ridge' )
 
-            self.metaFrame.grid_rowconfigure( (0,1,2),weight=1 )
-            self.metaFrame.grid_columnconfigure( 0,weight=1 )
-            self.metaFrame.grid( row=1,column=2,sticky='nsew' )
+    #        self.metaFrame.grid_rowconfigure( (0,1,2),weight=1 )
+    #        self.metaFrame.grid_columnconfigure( 0,weight=1 )
+    #        self.metaFrame.grid( row=1,column=2,sticky='nsew' )
 
-            self.selectmetafile = tk.Button( self.metaFrame,text='Select Experimental Design File',command=self.setMetaFile )
-            self.selectmetafile.grid( row=0,column=0,sticky='' )
+    #        self.selectmetafile = tk.Button( self.metaFrame,text='Select Experimental Design File',command=self.setMetaFile )
+    #        self.selectmetafile.grid( row=0,column=0,sticky='' )
 
-            self.saveMetaLabel = tk.Label( self.metaFrame,text='Experimental Design File:' )
-            self.saveMetaLabel.grid( row=1,column=0,sticky='s' )
+    #        self.saveMetaLabel = tk.Label( self.metaFrame,text='Experimental Design File:' )
+    #        self.saveMetaLabel.grid( row=1,column=0,sticky='s' )
 
-            self.metaFrame.update()
-            self.metaFile = 'None'
-            self.metaFileVar = tk.StringVar()
-            self.metaFileLabel = tk.Label( self.metaFrame,textvariable=self.metaFileVar,wraplength=int(0.9*(self.metaFrame.winfo_width())) )
-            self.metaFileLabel.grid( row=3,column=0,sticky='n' )
+    #        self.metaFrame.update()
+    #        self.metaFile = 'None'
+    #        self.metaFileVar = tk.StringVar()
+    #        self.metaFileLabel = tk.Label( self.metaFrame,textvariable=self.metaFileVar,wraplength=int(0.9*(self.metaFrame.winfo_width())) )
+    #        self.metaFileLabel.grid( row=3,column=0,sticky='n' )
 
-    def setDescFrame( self, ):
-        self.descFrame = tk.Frame( root,bg='#FDC47D',borderwidth=15,relief='ridge' )
+    def setDirFrame( self,bg,fg ):
+        self.dirFrame = tk.Frame( root,bg=bg,borderwidth=10,relief='ridge' )
+        self.dirFrameFG = fg
 
-        descLabel = tk.Label( self.descFrame,text="Description of this experiment and image series",anchor='center' )
-        descLabel.grid( column=1,row=0,sticky='' )
+        self.selectsavedir = tk.Button( self.dirFrame,text='Result Dir',command=self.setSaveDir, bg=fg )
+        self.selectsavedir.grid( row=0,column=0,sticky='' )
 
-        self.e1 = tk.Text( self.descFrame,height=4,width=20,font=('Helvetica',24) )
-        self.e1.grid( column=1,row=1,rowspan=2,sticky='nsew' )
+        self.selectmetafile = tk.Button( self.dirFrame,text='Meta-Data',command=self.setMetaFile, bg=fg )
+        self.selectmetafile.grid( row=1,column=0,sticky='' )
 
-        self.savebutton()
+        self.dirFrame.update()
+        self.metaFile = 'None'
+        self.metaFileVar = tk.StringVar()
+        self.saveDir = 'None'
+        self.saveDirVar = tk.StringVar()
 
-        self.descFrame.grid_rowconfigure( (0,1,2,3),weight=1 )
-        self.descFrame.grid_columnconfigure( (0,2),weight=1 )
-        self.descFrame.grid_columnconfigure( 1,weight=3 )
-        self.descFrame.grid( row=0,column=3,sticky='nsew' )
+        self.dirFrame.grid_rowconfigure( (0,1),weight=1 )
+        self.dirFrame.grid_columnconfigure( 0,weight=1 )
+        self.dirFrame.grid( row=0,column=2,sticky='nsew' )
 
-    def setRunFrame( self, ):
-        self.runFrame = tk.Frame( root,bg='#EA3B46',borderwidth=15,relief='ridge' )
+    #def setDescFrame( self, ):
+    #    self.descFrame = tk.Frame( root,bg='#FDC47D',borderwidth=15,relief='ridge' )
 
-        self.gpuNumLabel = tk.Label( self.runFrame,text='Select Which GPU\nOr -1 For CPU' )
-        self.gpuNumLabel.grid( row=0,column=0,sticky='e' )
-        self.gpuNumEntry = tk.Entry( self.runFrame,justify='center' )
-        self.gpuNumEntry.insert( END,'-1' )
-        self.gpuNumEntry.grid( row=0,column=1,sticky='w' )
+    #    descLabel = tk.Label( self.descFrame,text="Description of this experiment and image series",anchor='center' )
+    #    descLabel.grid( column=1,row=0,sticky='' )
 
-        self.Runbutton = tk.Button( self.runFrame,text='Run',command=self.process )
-        self.Runbutton.grid( row=1,columnspan=2 )
+    #    self.e1 = tk.Text( self.descFrame,height=4,width=20,font=('Helvetica',24) )
+    #    self.e1.grid( column=1,row=1,rowspan=2,sticky='nsew' )
 
-        self.runFrame.grid_rowconfigure( (0,1),weight=1 )
-        self.runFrame.grid_columnconfigure( (0,1),weight=1 )
-        self.runFrame.grid( row=1,column=3,sticky='nsew' )
+    #    self.savebutton()
+
+    #    self.descFrame.grid_rowconfigure( (0,1,2,3),weight=1 )
+    #    self.descFrame.grid_columnconfigure( (0,2),weight=1 )
+    #    self.descFrame.grid_columnconfigure( 1,weight=3 )
+    #    self.descFrame.grid( row=0,column=3,sticky='nsew' )
+
+    def setDescFrame( self,bg,fg ):
+        self.descFrame = tk.Frame( root,bg=bg,borderwidth=10,relief='ridge' )
+
+        descLabel = tk.Label( self.descFrame,text="Description:",anchor='center',bg=bg )
+        #descLabel.grid( column=0,row=0,sticky='we' )
+        descLabel.pack( side='left' )
+
+        self.e1 = tk.Entry( self.descFrame,width=20 )
+        #self.e1.grid( row=0,column=1,sticky='w' )
+        self.e1.pack( side='left' )
+
+        #self.descFrame.grid_rowconfigure( (0),weight=1 )
+        #self.descFrame.grid_columnconfigure( 0,weight=1 )
+        self.descFrame.grid( row=2,column=1,columnspan=2,sticky='nsew' )
+
+    #def setRunFrame( self, ):
+    #    self.runFrame = tk.Frame( root,bg='#EA3B46',borderwidth=15,relief='ridge' )
+
+    #    self.gpuNumLabel = tk.Label( self.runFrame,text='Select Which GPU\nOr -1 For CPU' )
+    #    self.gpuNumLabel.grid( row=0,column=0,sticky='e' )
+    #    self.gpuNumEntry = tk.Entry( self.runFrame,justify='center' )
+    #    self.gpuNumEntry.insert( END,'-1' )
+    #    self.gpuNumEntry.grid( row=0,column=1,sticky='w' )
+
+    #    self.Runbutton = tk.Button( self.runFrame,text='Run',command=self.process )
+    #    self.Runbutton.grid( row=1,columnspan=2 )
+
+    #    self.runFrame.grid_rowconfigure( (0,1),weight=1 )
+    #    self.runFrame.grid_columnconfigure( (0,1),weight=1 )
+    #    self.runFrame.grid( row=1,column=3,sticky='nsew' )
+
+    def setRunFrame( self,bg,fg ):
+        self.runFrame = tk.Frame( root,bg=bg,borderwidth=10,relief='ridge' )
+
+        self.Runbutton = tk.Button( self.runFrame,text='Run',command=self.process,bg=fg )
+        self.Runbutton.grid( row=0,column=0 )
+
+        self.runFrame.grid_rowconfigure( 0,weight=1 )
+        self.runFrame.grid_columnconfigure( 0,weight=1 )
+        self.runFrame.grid( row=1,rowspan=2,column=3,sticky='nsew' )
+
+    def setSegmentationFrame( self,bg,fg ):
+        self.segmentationFrame = tk.Frame( root,bg=bg,borderwidth=10,relief='ridge' )
+        self.segmentationFrameFG = fg
+
+        self.segmentationLabel = tk.Label(self.segmentationFrame,text='Seg Results',bg=bg)
+        self.segmentationLabel.grid(row=0,column=0,sticky='')
+
+        self.segmentationFrame.grid_rowconfigure( (0),weight=1 )
+        self.segmentationFrame.grid_columnconfigure( (0),weight=1 )
+        self.segmentationFrame.grid( row=0,column=3,sticky='nsew' )
+
+    def openSeg(self, segLst):
+        global seg_current
+        seg_current = 0
+        fg = self.segmentationFrameFG
+
+        self.previousbuttonSeg = tk.Button( self.segmentationFrame,text='<-',command=lambda: self.move(-1),bg=fg )
+        self.nextbuttonSeg = tk.Button( self.segmentationFrame,text='->',command=lambda: self.move(+1),bg=fg )
+
+        self.original_seg = Image.open( segLst[0] )
+        self.image_seg = ImageTk.PhotoImage( self.original )
+        self.canvas_seg = Canvas( self.segmentationFrame,bd=0,highlightthickness=0 )
+        self.canvasArea_seg = self.canvas.create_image( 0,0,image=self.image_seg,anchor=NE )
+        self.canvas_seg.grid( row=0,columnspan=2,sticky=W+E+N+S)
+        self.canvas_seg.bind( "<Configure>",self.resizeSeg )
+
+        self.segmentationFrame.update()
+
+    ## gets models from the pytorch_models directory
+    #def getModelsAvailable( self, ):
+    #    models_available = glob.glob( 'pytorch_models/*' )
+    #    models_available_list = []
+    #    for m in models_available:
+    #        models_available_list.append( m.split('/')[-1] )
+
+    #    modelTypeLabel = tk.Label( self.modelFrame,text='Select Model to Use',anchor='center' )
+    #    modelTypeLabel.grid( column=0,row=0,sticky=''  )
+
+    #    return models_available_list
 
     # gets models from the pytorch_models directory
     def getModelsAvailable( self, ):
         models_available = glob.glob( 'pytorch_models/*' )
         models_available_list = []
         for m in models_available:
-            models_available_list.append( m.split('/')[-1] )
+            models_available_list.append( m.split('/')[-1].split('\\')[-1].replace('.pth','') )
 
         modelTypeLabel = tk.Label( self.modelFrame,text='Select Model to Use',anchor='center' )
         modelTypeLabel.grid( column=0,row=0,sticky=''  )
@@ -257,52 +444,112 @@ class GUI(tk.Frame):
         self.savebutton = tk.Button( self.descFrame,text='save',command=self.save,anchor='center' )
         self.savebutton.grid( column=1,row=3 )
 
-    def selectbutton( self, ):
-        self.selectbutton = tk.Button( self.imageFrame,text='Select Images', command=self.openimage)
-        self.selectbutton.grid( columnspan=2,row=0)
+    def selectbutton( self,fg ):
+        self.imageFrameFG = fg
+        self.selectbutton = tk.Button( self.imageFrame,text='Select Images', command=self.openimage, bg=fg )
+        #self.selectbutton.grid( columnspan=2,row=0)
+        self.selectbutton.grid( row=0,column=0 )
 
-    def selectsavedir( self, ):
-        self.selectsavedir = tk.Button( self.dirFrame,text='Set Results Directory',command=self.setSaveDir )
-        self.selectsavedir.grid( row=3,column=0,sticky='' )
+    #def selectsavedir( self, ):
+    #    self.selectsavedir = tk.Button( self.dirFrame,text='Set Results Directory',command=self.setSaveDir )
+    #    self.selectsavedir.grid( row=3,column=0,sticky='' )
 
-        self.saveDirLabel0 = tk.Label( self.dirFrame,text='Results Directory:' )
-        self.saveDirLabel0.grid( row=4,column=0,sticky='s' )
+    #    self.saveDirLabel0 = tk.Label( self.dirFrame,text='Results Directory:' )
+    #    self.saveDirLabel0.grid( row=4,column=0,sticky='s' )
 
-        self.dirFrame.update()
-        self.saveDir = 'None'
-        self.saveDirVar = tk.StringVar()
-        self.saveDirLabel = tk.Label( self.dirFrame,textvariable=self.saveDirVar,wraplength=int(0.9*(self.dirFrame.winfo_width())) )
-        self.saveDirLabel.grid( row=5,column=0,sticky='n' )
+    #    self.dirFrame.update()
+    #    self.saveDir = 'None'
+    #    self.saveDirVar = tk.StringVar()
+    #    self.saveDirLabel = tk.Label( self.dirFrame,textvariable=self.saveDirVar,wraplength=int(0.9*(self.dirFrame.winfo_width())) )
+    #    self.saveDirLabel.grid( row=5,column=0,sticky='n' )
+
+    #def selectsavedir( self, ):
+    #    self.selectsavedir = tk.Button( self.dirFrame,text='Set Results Directory',command=self.setSaveDir )
+    #    self.selectsavedir.grid( row=3,column=0,sticky='' )
+
+    #    #self.saveDirLabel0 = tk.Label( self.dirFrame,text='Results Directory:' )
+    #    #self.saveDirLabel0.grid( row=4,column=0,sticky='s' )
+
+    #    self.dirFrame.update()
+    #    self.saveDir = 'None'
+    #    self.saveDirVar = tk.StringVar()
+    #    #self.saveDirLabel = tk.Label( self.dirFrame,textvariable=self.saveDirVar,wraplength=int(0.9*(self.dirFrame.winfo_width())) )
+    #    #self.saveDirLabel.grid( row=5,column=0,sticky='n' )
+
+    #def openimage(self):
+    #    global imagelst
+    #    global current
+    #    current = 0
+
+    #    self.filenames = filedialog.askopenfilenames(filetypes=( ('all files','*.*'),('png files','*.png'),('jpeg files','*.jpeg') ), initialdir='/', title='Select Image')
+    #    imagelst = self.sortimages( self.filenames )
+
+    #    self.imageNameLabel = tk.Label( self.imageFrame )
+    #    self.original = Image.open( imagelst[0] )
+    #    self.image = ImageTk.PhotoImage( self.original )
+    #    self.canvas = Canvas( self.imageFrame,bd=0,highlightthickness=0 )
+    #    self.canvasArea = self.canvas.create_image( 0,0,image=self.image,anchor=NW )
+    #    self.canvas.grid( row=2,columnspan=2,sticky=W+E+N+S)
+    #    self.canvas.bind( "<Configure>",self.resize )
+
+    #    self.imageFrame.update()
+    #    self.imageNameVar = tk.StringVar()
+    #    self.imageNameVar.set( imagelst[ current ] )
+    #    self.imageNameLabel = tk.Label( self.imageFrame,textvariable=self.imageNameVar,wraplength=int(0.9*(self.canvas.winfo_width())) )
+    #    self.imageNameLabel.grid( row=1,columnspan=2,sticky='s' )
 
     def openimage(self):
         global imagelst
         global current
         current = 0
+        fg = self.imageFrameFG
 
         self.filenames = filedialog.askopenfilenames(filetypes=( ('all files','*.*'),('png files','*.png'),('jpeg files','*.jpeg') ), initialdir='/', title='Select Image')
         imagelst = self.sortimages( self.filenames )
 
-        self.imageNameLabel = tk.Label( self.imageFrame )
+        #self.imageNameLabel = tk.Label( self.imageFrame )
         self.original = Image.open( imagelst[0] )
         self.image = ImageTk.PhotoImage( self.original )
         self.canvas = Canvas( self.imageFrame,bd=0,highlightthickness=0 )
         self.canvasArea = self.canvas.create_image( 0,0,image=self.image,anchor=NW )
-        self.canvas.grid( row=2,columnspan=2,sticky=W+E+N+S)
+        self.canvas.grid( row=0,column=0,sticky=W+E+N+S )
         self.canvas.bind( "<Configure>",self.resize )
 
+        self.previousbutton = tk.Button( self.imageFrame,text='<-',width=2,command=lambda: self.move(-1),anchor='sw',bg=fg )
+        self.nextbutton = tk.Button( self.imageFrame,text='->',width=2,command=lambda: self.move(+1),anchor='se',bg=fg )
+
         self.imageFrame.update()
-        self.imageNameVar = tk.StringVar()
-        self.imageNameVar.set( imagelst[ current ] )
-        self.imageNameLabel = tk.Label( self.imageFrame,textvariable=self.imageNameVar,wraplength=int(0.9*(self.canvas.winfo_width())) )
-        self.imageNameLabel.grid( row=1,columnspan=2,sticky='s' )
+        #self.imageNameVar = tk.StringVar()
+        #self.imageNameVar.set( imagelst[ current ] )
+        #self.imageNameLabel = tk.Label( self.imageFrame,textvariable=self.imageNameVar,wraplength=int(0.9*(self.canvas.winfo_width())) )
+        #self.imageNameLabel.grid( row=1,columnspan=2,sticky='s' )
 
     def resize( self,event ):
         size = (event.width, event.height)
         resized = self.original.resize( size,Image.ANTIALIAS )
         self.image = ImageTk.PhotoImage( resized )
         self.canvas.create_image( 0,0,image=self.image,anchor=NW )
-        self.imageNameLabel.config( wraplength=event.width )
+
+        canvas_height = self.canvas.winfo_height()
+        canvas_width = self.canvas.winfo_width()
+
+        self.previousbutton.place(x=0,y=canvas_height,anchor='sw')
+        self.nextbutton.place(x=canvas_width,y=canvas_height,anchor='se')
+
         self.imageFrame.update()
+
+    def resizeSeg( self,event_seg ):
+        size = (event_seg.width, event_seg.height)
+        resized = self.original_seg.resize( size,Image.ANTIALIAS )
+        self.image_seg = ImageTk.PhotoImage( resized )
+        self.canvas_seg.create_image( 0,0,image=self.image_seg,anchor=NW )
+
+        canvas_height = self.canvas_seg.winfo_height()
+        canvas_width = self.canvas_seg.winfo_width()
+
+        self.previousbuttonSeg.place(x=0,y=canvas_height,anchor='sw')
+        self.nextbuttonSeg.place(x=canvas_width,y=canvas_height,anchor='se')
+        self.segmentationFrame.update()
 
     def move(self, delta):
         global current
@@ -312,7 +559,7 @@ class GUI(tk.Frame):
             current = len(imagelst)-1
         if current >= len(imagelst):
             current = 0
-        self.imageNameVar.set( imagelst[ current ] )
+        #self.imageNameVar.set( imagelst[ current ] )
 
         self.original = Image.open( imagelst[current] )
         resized = self.original.resize( (self.canvas.winfo_width(),self.canvas.winfo_height()),Image.ANTIALIAS )
@@ -320,21 +567,50 @@ class GUI(tk.Frame):
         self.canvas.itemconfig( self.canvasArea,image=self.image )
         self.imageFrame.update()
 
-    def nextbutton(self):
-        self.nextbutton = tk.Button( self.imageFrame,text='Next',command=lambda: self.move(+1) )
-        self.nextbutton.grid( row=3,column=1 )
+    def moveSeg(self, delta):
+        global seg_current
 
-    def previousbutton(self):
-        self.previousbutton = tk.Button( self.imageFrame,text='Previous',command=lambda: self.move(-1) )
-        self.previousbutton.grid( row=3,column=0 )
+        seg_current += delta
+        if seg_current < 0:
+            seg_current = len(imagelst)-1
+        if seg_current >= len(imagelst):
+            seg_current = 0
+        #self.imageNameVar.set( imagelst[ seg_current ] )
+
+        self.original_seg = Image.open( imagelst[seg_current] )
+        resized = self.original_seg.resize( (self.canvas_seg.winfo_width(),self.canvas_seg.winfo_height()),Image.ANTIALIAS )
+        self.image_seg = ImageTk.PhotoImage( resized )
+        self.canvas_seg.itemconfig( self.canvasArea_seg,image=self.image_seg )
+        self.segmentationFrame.update()
+
+
+    #def setSaveDir(self):
+    #    self.saveDir = filedialog.askdirectory( initialdir='/',title='Select Save Directory' )
+    #    self.saveDirVar.set( self.saveDir )
 
     def setSaveDir(self):
+        fg = self.dirFrameFG
         self.saveDir = filedialog.askdirectory( initialdir='/',title='Select Save Directory' )
         self.saveDirVar.set( self.saveDir )
+        savedir_label = self.saveDir.split('\\')[-1].split('/')[-1]
+
+        self.selectsavedir.destroy()
+        self.savedirset = tk.Label( self.dirFrame,text=savedir_label,bg=fg,wraplength=int(0.9*(self.dirFrameFG.winfo_width())) )
+        self.savedirset.grid( row=0,column=0,sticky='' )
+
+    #def setMetaFile(self):
+    #    self.metaFile = filedialog.askopenfilename( filetypes=( ('excel files','*.xlsx'),('csv files','*.csv'),('all files','*.*') ), initialdir='/', title='Select Experimental Design File')
+    #    self.metaFileVar.set( self.metaFile )
 
     def setMetaFile(self):
+        fg = self.dirFrameFG
         self.metaFile = filedialog.askopenfilename( filetypes=( ('excel files','*.xlsx'),('csv files','*.csv'),('all files','*.*') ), initialdir='/', title='Select Experimental Design File')
         self.metaFileVar.set( self.metaFile )
+        metafile_label = self.metaFile.split('\\')[-1].split('/')[-1]
+
+        self.selectmetafile.destroy()
+        self.selectmetaset = tk.Label( self.dirFrame,text=metafile_label,bg=fg,wraplength=int(0.9*(self.dirFrameFG.winfo_width())) )
+        self.selectmetaset.grid( row=1,column=0,sticky='' )
 
     # sorts images by time and constructs a dataframe to hold them
     def sortimages( self,filenames ):
