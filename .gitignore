@@ -19,3 +19,8 @@ models_to_test/
 test_imgs
 *.p
 checkimgs/
+
+*.xlsx
+*.txt
+IoU_Results/
+makeCircles.py
