@@ -20,8 +20,8 @@ test_imgs
 *.p
 checkimgs/
 
-utils/.*
-models/.*
+utils/._*
+model/.*
 
 *.xlsx
 *.txt
