@@ -218,7 +218,8 @@ def process(model_name,img_dir,model_dir,gpu=0):
     print( '****************************************************************************' )
 
 if __name__ == "__main__":
-    process('Focal',
+    process('IoU',:w
+            
             img_dir='./test_imgs',
             model_dir='./models_to_test',
             gpu=0
