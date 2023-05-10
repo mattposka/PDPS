@@ -1,5 +1,0 @@
-Image Name,File Location,CameraID,Year,Month,Day,Hour,Innoc Year,Innoc Month,Innoc Day,Innoc Hour,Hours Elapsed,Lesion #,Lesion Area Pixels,ResizeRatio,Adjusted Lesion Pixels,Avg Adj Pixel Size,Camera #,Array #,Leaf #,Leaf Section #,Covariable 1,Covariable 2,Covariable 3,Covariable 4,Vector Name,Gene of Interest,Comments,Description
-rapa_cam_23_2021-02-27_0000.png,C:/Users/mattp/repos/leaf_seg/rapa_cam_23_2021-02-27_0000.png,23,2021,2,27,0,2021,2,25,16,32,1,3844,14,56562.217041015625,53269.8663482666,23,,,,,,,,,,,IoU_Run
-rapa_cam_23_2021-02-27_0000.png,C:/Users/mattp/repos/leaf_seg/rapa_cam_23_2021-02-27_0000.png,23,2021,2,27,0,2021,2,25,16,32,2,3356,14,49381.581787109375,,23,,,,,,,,,,,IoU_Run
-rapa_cam_23_2021-02-27_0000.png,C:/Users/mattp/repos/leaf_seg/rapa_cam_23_2021-02-27_0000.png,23,2021,2,27,0,2021,2,25,16,32,3,3479,14,51191.455017089844,,23,,,,,,,,,,,IoU_Run
-rapa_cam_23_2021-02-27_0000.png,C:/Users/mattp/repos/leaf_seg/rapa_cam_23_2021-02-27_0000.png,23,2021,2,27,0,2021,2,25,16,32,4,3802,14,55944.21154785156,,23,,,,,,,,,,,IoU_Run

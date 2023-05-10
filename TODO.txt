@@ -1,3 +1,0 @@
-blur lesion map from nn earlier?
-find out why random lesions are missing
-train new model with deep supervision
