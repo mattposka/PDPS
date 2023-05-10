@@ -17,9 +17,6 @@ import torch
 from torch.utils import data
 import postprocess as postp
 
-import model.u_netDICE as u_netDICE
-import model.u_netDICE_Brown as u_netDICE_Brown
-#import model.u_netDICE_BrownCE as u_netDICE_BrownCE
 import model.u_net2 as u_net
 
 import torch.nn as nn

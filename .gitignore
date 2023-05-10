@@ -20,6 +20,9 @@ test_imgs
 *.p
 checkimgs/
 
+utils/.*
+models/.*
+
 *.xlsx
 *.txt
 IoU_Results/
